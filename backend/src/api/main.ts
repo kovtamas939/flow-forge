@@ -5,7 +5,7 @@ try {
   const config = loadConfig();
   const app = await buildApp();
   await app.listen({ host: config.host, port: config.port });
-  console.log(`API listening on http://${config.host}:${config.port}`);
+  app.log.info(`API listening on http://${config.host}:${config.port}`);
 } catch (error: unknown) {
   if (error instanceof ConfigError) {
     console.error(error.message);
