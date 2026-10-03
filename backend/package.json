@@ -11,7 +11,11 @@
     "check-node": "node -e \"console.log('Node', process.version)\"",
     "typecheck": "tsc --noEmit",
     "build": "tsc",
-    "check-config": "npm run build && node dist/check-config.js"
+    "check-config": "npm run build && node dist/check-config.js",
+    "start": "npm run build && node dist/api/main.js"
+  },
+  "dependencies": {
+    "fastify": "^5.12.5"
   },
   "devDependencies": {
     "@types/node": "^20.14.0",

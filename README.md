@@ -15,3 +15,4 @@ npm install
 npm run check-node
 npm run typecheck
 npm run check-config
+npm start
