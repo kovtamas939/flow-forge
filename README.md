@@ -6,6 +6,7 @@ Workflow automation.
 
 - `backend/` — Node.js + TypeScript application
 - `frontend/` — Angular + TypeScript client.
+- `docker-compose.yml` — local PostgreSQL.
 
 ## Local development
 
@@ -16,3 +17,9 @@ npm run check-node
 npm run typecheck
 npm run check-config
 npm start
+
+PostgreSQL (from the repository root):
+```bash
+cp .env.example .env
+docker compose up -d
+docker compose ps
