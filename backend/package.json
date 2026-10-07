@@ -13,6 +13,7 @@
     "build": "tsc",
     "check-config": "npm run build && node --env-file=.env dist/check-config.js",
     "check-db": "npm run build && node --env-file=.env dist/check-db.js",
+    "migrate": "npm run build && node --env-file=.env dist/db/migrate.js",
     "start": "npm run build && node --env-file=.env dist/api/main.js"
   },
   "dependencies": {
