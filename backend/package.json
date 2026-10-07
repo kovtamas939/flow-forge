@@ -11,14 +11,17 @@
     "check-node": "node -e \"console.log('Node', process.version)\"",
     "typecheck": "tsc --noEmit",
     "build": "tsc",
-    "check-config": "npm run build && node dist/check-config.js",
-    "start": "npm run build && node dist/api/main.js"
+    "check-config": "npm run build && node --env-file=.env dist/check-config.js",
+    "check-db": "npm run build && node --env-file=.env dist/check-db.js",
+    "start": "npm run build && node --env-file=.env dist/api/main.js"
   },
   "dependencies": {
-    "fastify": "^5.12.5"
+    "fastify": "^5.12.5",
+    "pg": "^8.23.1"
   },
   "devDependencies": {
     "@types/node": "^20.14.0",
+    "@types/pg": "^8.15.0",
     "typescript": "^5.6.3"
   }
 }

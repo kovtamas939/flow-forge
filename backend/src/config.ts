@@ -4,6 +4,7 @@ export type AppConfig = {
   nodeEnv: NodeEnv;
   host: string;
   port: number;
+  databaseUrl: string;
 };
 
 export class ConfigError extends Error {
@@ -59,16 +60,51 @@ function parsePort(raw: string | undefined, errors: string[]): number {
   return port;
 }
 
+function parseDatabaseUrl(raw: string | undefined, errors: string[]): string {
+  if (raw === undefined) {
+    errors.push("DATABASE_URL is required");
+    return "postgres://invalid";
+  }
+
+  try {
+    const url = new URL(raw);
+    const protocolOk = url.protocol === "postgres:" || url.protocol === "postgresql:";
+    const databaseName = url.pathname.replace(/^\//, "");
+
+    if (!protocolOk) {
+      errors.push("DATABASE_URL must use the postgres or postgresql scheme");
+    }
+
+    if (url.hostname.length === 0) {
+      errors.push("DATABASE_URL must include a host");
+    }
+
+    if (url.username.length === 0) {
+      errors.push("DATABASE_URL must include a username");
+    }
+
+    if (databaseName.length === 0) {
+      errors.push("DATABASE_URL must include a database name");
+    }
+
+    return raw;
+  } catch {
+    errors.push("DATABASE_URL must be a valid URL");
+    return "postgres://invalid";
+  }
+}
+
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
   const errors: string[] = [];
 
   const nodeEnv = parseNodeEnv(readOptional(env, "NODE_ENV"), errors);
   const host = parseHost(readOptional(env, "HOST"), errors);
   const port = parsePort(readOptional(env, "PORT"), errors);
+  const databaseUrl = parseDatabaseUrl(readOptional(env, "DATABASE_URL"), errors);
 
   if (errors.length > 0) {
     throw new ConfigError(`Invalid environment configuration: ${errors.join("; ")}`);
   }
 
-  return { nodeEnv, host, port };
+  return { nodeEnv, host, port, databaseUrl };
 }

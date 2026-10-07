@@ -6,6 +6,7 @@ try {
     nodeEnv: config.nodeEnv,
     host: config.host,
     port: config.port,
+    databaseUrlConfigured: true,
   });
 } catch (error: unknown) {
   if (error instanceof ConfigError) {
