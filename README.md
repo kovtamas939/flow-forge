@@ -11,13 +11,16 @@ Workflow automation.
 
 ## Local development
 
-PostgreSQL (from the repository root):
+#### PostgreSQL (from the repository root):
+
 ```bash
 cp .env.example .env
 docker compose up -d
 docker compose ps
+```
 
-API (from backend/):
+#### API (from backend/):
+
 ```bash
 cp .env.example .env
 npm install
@@ -27,3 +30,4 @@ npm run check-config
 npm run check-db
 npm run migrate
 npm start
+```
