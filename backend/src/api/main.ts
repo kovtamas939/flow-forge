@@ -10,17 +10,38 @@ try {
     await pingPool(pool);
 
     const app = await buildApp();
+    let shutdownPromise: Promise<void> | undefined;
 
-    const shutdown = async (signal: string): Promise<void> => {
-      app.log.info({ signal }, "shutting down");
-      await app.close();
-      await closePool(pool);
-      process.exit(0);
+    const shutdown = (signal: string): Promise<void> => {
+      if (shutdownPromise !== undefined) {
+        return shutdownPromise;
+      }
+
+      shutdownPromise = (async () => {
+        app.log.info({ signal }, "shutting down");
+
+        try {
+          await app.close();
+        } catch (error: unknown) {
+          app.log.error({ err: error }, "failed to close API");
+          process.exitCode = 1;
+        }
+
+        try {
+          await closePool(pool);
+        } catch (error: unknown) {
+          app.log.error({ err: error }, "failed to close database pool");
+          process.exitCode = 1;
+        }
+      })();
+
+      return shutdownPromise;
     };
 
     process.once("SIGINT", () => {
       void shutdown("SIGINT");
     });
+
     process.once("SIGTERM", () => {
       void shutdown("SIGTERM");
     });
