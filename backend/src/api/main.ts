@@ -9,7 +9,7 @@ try {
   try {
     await pingPool(pool);
 
-    const app = await buildApp();
+    const app = await buildApp(pool);
     let shutdownPromise: Promise<void> | undefined;
 
     const shutdown = (signal: string): Promise<void> => {

@@ -1,5 +1,6 @@
 import Fastify from "fastify";
 import type { FastifyInstance } from "fastify";
+import type { Pool } from "pg";
 import {
   generateRequestId,
   registerRequestIdHook,
@@ -7,7 +8,7 @@ import {
 } from "./request-id.js";
 import { registerRoutes } from "./routes.js";
 
-export async function buildApp(): Promise<FastifyInstance> {
+export async function buildApp(pool: Pool): Promise<FastifyInstance> {
   const app = Fastify({
     logger: {
       level: "info",
@@ -17,6 +18,6 @@ export async function buildApp(): Promise<FastifyInstance> {
   });
 
   registerRequestIdHook(app);
-  await app.register(registerRoutes);
+  await app.register(registerRoutes, { pool });
   return app;
 }
