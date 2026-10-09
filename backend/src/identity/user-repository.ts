@@ -11,6 +11,12 @@ export type User = {
   updatedAt: Date;
 };
 
+export type CreateUserInput = {
+  email: string;
+  emailNormalized: string;
+  passwordHash: string;
+};
+
 type UserRow = {
   id: string;
   email: string;
@@ -53,6 +59,35 @@ export async function findUserByNormalizedEmail(
       LIMIT 1
     `,
     [normalizedEmail],
+  );
+
+  const row = result.rows[0];
+
+  return row === undefined ? null : mapUserRow(row);
+}
+
+export async function createUser(
+  pool: Pool,
+  input: CreateUserInput,
+): Promise<User | null> {
+  const result = await pool.query<UserRow>(
+    `
+      INSERT INTO users (
+        email,
+        email_normalized,
+        password_hash
+      )
+      VALUES ($1, $2, $3)
+      ON CONFLICT (email_normalized) DO NOTHING
+      RETURNING
+        id,
+        email,
+        email_normalized,
+        status,
+        created_at,
+        updated_at
+    `,
+    [input.email, input.emailNormalized, input.passwordHash],
   );
 
   const row = result.rows[0];
