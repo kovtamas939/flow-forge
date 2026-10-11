@@ -5,6 +5,7 @@ import { healthRoutes } from "./routes/health.js";
 
 type RegisterRoutesOptions = {
   pool: Pool;
+  secureCookies: boolean;
 };
 
 export async function registerRoutes(
@@ -12,5 +13,8 @@ export async function registerRoutes(
   options: RegisterRoutesOptions,
 ): Promise<void> {
   await app.register(healthRoutes);
-  await app.register(authRoutes, { pool: options.pool });
+  await app.register(authRoutes, {
+    pool: options.pool,
+    secureCookies: options.secureCookies,
+  });
 }

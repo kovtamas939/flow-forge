@@ -1,3 +1,4 @@
+import fastifyCookie from "@fastify/cookie";
 import Fastify from "fastify";
 import type { FastifyInstance } from "fastify";
 import type { Pool } from "pg";
@@ -8,7 +9,10 @@ import {
 } from "./request-id.js";
 import { registerRoutes } from "./routes.js";
 
-export async function buildApp(pool: Pool): Promise<FastifyInstance> {
+export async function buildApp(
+  pool: Pool,
+  secureCookies: boolean,
+): Promise<FastifyInstance> {
   const app = Fastify({
     logger: {
       level: "info",
@@ -17,7 +21,9 @@ export async function buildApp(pool: Pool): Promise<FastifyInstance> {
     genReqId: generateRequestId,
   });
 
+  await app.register(fastifyCookie);
   registerRequestIdHook(app);
-  await app.register(registerRoutes, { pool });
+  await app.register(registerRoutes, { pool, secureCookies });
+
   return app;
 }

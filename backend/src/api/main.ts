@@ -9,7 +9,8 @@ try {
   try {
     await pingPool(pool);
 
-    const app = await buildApp(pool);
+    const secureCookies = config.nodeEnv === "production";
+    const app = await buildApp(pool, secureCookies);
     let shutdownPromise: Promise<void> | undefined;
 
     const shutdown = (signal: string): Promise<void> => {
