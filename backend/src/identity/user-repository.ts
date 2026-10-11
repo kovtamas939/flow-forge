@@ -17,6 +17,11 @@ export type CreateUserInput = {
   passwordHash: string;
 };
 
+export type UserCredential = {
+  user: User;
+  passwordHash: string;
+};
+
 type UserRow = {
   id: string;
   email: string;
@@ -24,6 +29,10 @@ type UserRow = {
   status: string;
   created_at: Date;
   updated_at: Date;
+};
+
+type UserCredentialRow = UserRow & {
+  password_hash: string;
 };
 
 function mapUserRow(row: UserRow): User {
@@ -64,6 +73,39 @@ export async function findUserByNormalizedEmail(
   const row = result.rows[0];
 
   return row === undefined ? null : mapUserRow(row);
+}
+
+export async function findUserCredentialByNormalizedEmail(
+  pool: Pool,
+  normalizedEmail: string,
+): Promise<UserCredential | null> {
+  const result = await pool.query<UserCredentialRow>(
+    `
+      SELECT
+        id,
+        email,
+        email_normalized,
+        password_hash,
+        status,
+        created_at,
+        updated_at
+      FROM users
+      WHERE email_normalized = $1
+      LIMIT 1
+    `,
+    [normalizedEmail],
+  );
+
+  const row = result.rows[0];
+
+  if (row === undefined) {
+    return null;
+  }
+
+  return {
+    user: mapUserRow(row),
+    passwordHash: row.password_hash,
+  };
 }
 
 export async function createUser(
