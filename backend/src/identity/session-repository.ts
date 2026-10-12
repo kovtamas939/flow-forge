@@ -1,5 +1,5 @@
 import type { Pool } from "pg";
-import type { User, UserStatus } from "./user-repository.js";
+import type { User } from "./user-repository.js";
 
 export type CreateSessionInput = {
   userId: string;
@@ -74,4 +74,17 @@ export async function findActiveSessionUserByTokenHash(
   const row = result.rows[0];
 
   return row === undefined ? null : mapSessionUserRow(row);
+}
+
+export async function deleteSessionByTokenHash(
+  pool: Pool,
+  tokenHash: string,
+): Promise<void> {
+  await pool.query(
+    `
+      DELETE FROM sessions
+      WHERE token_hash = $1
+    `,
+    [tokenHash],
+  );
 }

@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import type { Pool } from "pg";
 import type {
@@ -15,6 +16,7 @@ import {
   LoginInputError,
   SESSION_DURATION_SECONDS,
 } from "../../identity/login-service.js";
+import { deleteSessionByTokenHash } from "../../identity/session-repository.js";
 import {
   requireAuthentication,
   SESSION_COOKIE_NAME,
@@ -100,6 +102,14 @@ const currentUserSchema = {
   response: {
     200: currentUserResponseSchema,
     401: errorResponseSchema,
+  },
+} as const;
+
+const logoutSchema = {
+  response: {
+    204: {
+      type: "null",
+    },
   },
 } as const;
 
@@ -245,6 +255,36 @@ export async function authRoutes(
       }
 
       return reply.code(200).send(toCurrentUserResponse(user));
+    },
+  );
+
+  app.post(
+    "/api/v1/auth/logout",
+    {
+      schema: logoutSchema,
+    },
+    async (request, reply) => {
+      const sessionToken = request.cookies[SESSION_COOKIE_NAME];
+
+      if (
+        sessionToken !== undefined &&
+        /^[A-Za-z0-9_-]{43}$/.test(sessionToken)
+      ) {
+        const tokenHash = createHash("sha256")
+          .update(sessionToken)
+          .digest("hex");
+
+        await deleteSessionByTokenHash(options.pool, tokenHash);
+      }
+
+      reply.clearCookie(SESSION_COOKIE_NAME, {
+        httpOnly: true,
+        secure: options.secureCookies,
+        sameSite: "lax",
+        path: "/",
+      });
+
+      return reply.code(204).send();
     },
   );
 }
