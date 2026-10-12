@@ -22,6 +22,8 @@ export async function buildApp(
   });
 
   await app.register(fastifyCookie);
+  app.decorateRequest("currentUser", null);
+
   registerRequestIdHook(app);
   await app.register(registerRoutes, { pool, secureCookies });
 

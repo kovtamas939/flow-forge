@@ -15,13 +15,15 @@ import {
   LoginInputError,
   SESSION_DURATION_SECONDS,
 } from "../../identity/login-service.js";
+import {
+  requireAuthentication,
+  SESSION_COOKIE_NAME,
+} from "../authentication.js";
 
 type AuthRoutesOptions = {
   pool: Pool;
   secureCookies: boolean;
 };
-
-const COOKIE_NAME = "flowforge_session";
 
 const currentUserResponseSchema = {
   type: "object",
@@ -90,6 +92,13 @@ const loginSchema = {
   response: {
     200: currentUserResponseSchema,
     400: errorResponseSchema,
+    401: errorResponseSchema,
+  },
+} as const;
+
+const currentUserSchema = {
+  response: {
+    200: currentUserResponseSchema,
     401: errorResponseSchema,
   },
 } as const;
@@ -188,7 +197,7 @@ export async function authRoutes(
       try {
         const result = await loginUser(options.pool, request.body);
 
-        reply.setCookie(COOKIE_NAME, result.sessionToken, {
+        reply.setCookie(SESSION_COOKIE_NAME, result.sessionToken, {
           httpOnly: true,
           secure: options.secureCookies,
           sameSite: "lax",
@@ -213,6 +222,29 @@ export async function authRoutes(
 
         throw error;
       }
+    },
+  );
+
+  app.get(
+    "/api/v1/auth/me",
+    {
+      preHandler: requireAuthentication(options.pool),
+      schema: currentUserSchema,
+    },
+    async (request, reply) => {
+      const user = request.currentUser;
+
+      if (user === null) {
+        return reply.code(401).send(
+          createErrorResponse(
+            "UNAUTHENTICATED",
+            "Authentication is required",
+            request.id,
+          ),
+        );
+      }
+
+      return reply.code(200).send(toCurrentUserResponse(user));
     },
   );
 }
