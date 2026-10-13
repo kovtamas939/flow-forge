@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 import type { Pool } from "pg";
 import { authRoutes } from "./routes/auth.js";
 import { healthRoutes } from "./routes/health.js";
+import { workspaceRoutes } from "./routes/workspaces.js";
 
 type RegisterRoutesOptions = {
   pool: Pool;
@@ -16,5 +17,8 @@ export async function registerRoutes(
   await app.register(authRoutes, {
     pool: options.pool,
     secureCookies: options.secureCookies,
+  });
+  await app.register(workspaceRoutes, {
+    pool: options.pool,
   });
 }
