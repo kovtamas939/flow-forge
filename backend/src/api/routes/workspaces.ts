@@ -6,7 +6,9 @@ import {
   WorkspaceInputError,
 } from "../../workspaces/create-workspace-service.js";
 import { listWorkspacesForUser } from "../../workspaces/list-user-workspaces-service.js";
+import { findWorkspaceById } from "../../workspaces/workspace-repository.js";
 import { requireAuthentication } from "../authentication.js";
+import { requireWorkspacePermission } from "../workspace-authorization.js";
 
 type WorkspaceRoutesOptions = {
   pool: Pool;
@@ -91,6 +93,28 @@ const listWorkspacesSchema = {
   response: {
     200: workspaceListResponseSchema,
     401: errorResponseSchema,
+  },
+} as const;
+
+const getWorkspaceSchema = {
+  params: {
+    type: "object",
+    additionalProperties: false,
+    required: ["workspaceId"],
+    properties: {
+      workspaceId: {
+        type: "string",
+        pattern:
+          "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+      },
+    },
+  },
+  response: {
+    200: workspaceResponseSchema,
+    400: errorResponseSchema,
+    401: errorResponseSchema,
+    403: errorResponseSchema,
+    404: errorResponseSchema,
   },
 } as const;
 
@@ -201,6 +225,43 @@ export async function workspaceRoutes(
 
         throw error;
       }
+    },
+  );
+
+  app.get(
+    "/api/v1/workspaces/:workspaceId",
+    {
+      preHandler: [
+        requireAuthentication(options.pool),
+        requireWorkspacePermission(options.pool, "workspace:read"),
+      ],
+      schema: getWorkspaceSchema,
+    },
+    async (request, reply) => {
+      const params = request.params as { workspaceId: string };
+      const workspace = await findWorkspaceById(
+        options.pool,
+        params.workspaceId,
+      );
+
+      if (workspace === null) {
+        return reply.code(404).send(
+          createErrorResponse(
+            "NOT_FOUND",
+            "Workspace not found",
+            request.id,
+          ),
+        );
+      }
+
+      return reply.code(200).send({
+        workspace: {
+          id: workspace.id,
+          name: workspace.name,
+          createdAt: workspace.createdAt.toISOString(),
+          updatedAt: workspace.updatedAt.toISOString(),
+        },
+      });
     },
   );
 }

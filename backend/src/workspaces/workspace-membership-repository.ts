@@ -18,6 +18,10 @@ type UserWorkspaceRow = {
   created_at: Date;
 };
 
+type WorkspaceRoleRow = {
+  role: string;
+};
+
 function mapUserWorkspaceRow(row: UserWorkspaceRow): UserWorkspace {
   if (!isWorkspaceRole(row.role)) {
     throw new Error(`Unexpected workspace role "${row.role}"`);
@@ -52,4 +56,33 @@ export async function findWorkspacesForUser(
   );
 
   return result.rows.map(mapUserWorkspaceRow);
+}
+
+export async function findWorkspaceRoleForUser(
+  pool: Pool,
+  userId: string,
+  workspaceId: string,
+): Promise<WorkspaceRole | null> {
+  const result = await pool.query<WorkspaceRoleRow>(
+    `
+      SELECT role
+      FROM workspace_memberships
+      WHERE user_id = $1
+        AND workspace_id = $2
+      LIMIT 1
+    `,
+    [userId, workspaceId],
+  );
+
+  const row = result.rows[0];
+
+  if (row === undefined) {
+    return null;
+  }
+
+  if (!isWorkspaceRole(row.role)) {
+    throw new Error(`Unexpected workspace role "${row.role}"`);
+  }
+
+  return row.role;
 }

@@ -1,4 +1,4 @@
-import type { PoolClient } from "pg";
+import type { Pool, PoolClient } from "pg";
 
 export type Workspace = {
   id: string;
@@ -65,4 +65,27 @@ export async function insertWorkspaceOwnerMembership(
     `,
     [workspaceId, userId],
   );
+}
+
+export async function findWorkspaceById(
+  pool: Pool,
+  workspaceId: string,
+): Promise<Workspace | null> {
+  const result = await pool.query<WorkspaceRow>(
+    `
+      SELECT
+        id,
+        name,
+        created_at,
+        updated_at
+      FROM workspaces
+      WHERE id = $1
+      LIMIT 1
+    `,
+    [workspaceId],
+  );
+
+  const row = result.rows[0];
+
+  return row === undefined ? null : mapWorkspaceRow(row);
 }
