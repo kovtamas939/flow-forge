@@ -1,6 +1,8 @@
 import type { Pool } from "pg";
-
-export type WorkspaceRole = "OWNER" | "ADMIN" | "MEMBER";
+import {
+  isWorkspaceRole,
+  type WorkspaceRole,
+} from "./workspace-policy.js";
 
 export type UserWorkspace = {
   id: string;
@@ -17,11 +19,7 @@ type UserWorkspaceRow = {
 };
 
 function mapUserWorkspaceRow(row: UserWorkspaceRow): UserWorkspace {
-  if (
-    row.role !== "OWNER" &&
-    row.role !== "ADMIN" &&
-    row.role !== "MEMBER"
-  ) {
+  if (!isWorkspaceRole(row.role)) {
     throw new Error(`Unexpected workspace role "${row.role}"`);
   }
 
