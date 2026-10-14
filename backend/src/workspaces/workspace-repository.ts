@@ -14,6 +14,10 @@ type WorkspaceRow = {
   updated_at: Date;
 };
 
+type WorkspaceMembershipIdRow = {
+  id: string;
+};
+
 function mapWorkspaceRow(row: WorkspaceRow): Workspace {
   return {
     id: row.id,
@@ -53,8 +57,8 @@ export async function insertWorkspaceOwnerMembership(
   client: PoolClient,
   workspaceId: string,
   userId: string,
-): Promise<void> {
-  await client.query(
+): Promise<string> {
+  const result = await client.query<WorkspaceMembershipIdRow>(
     `
       INSERT INTO workspace_memberships (
         workspace_id,
@@ -62,9 +66,18 @@ export async function insertWorkspaceOwnerMembership(
         role
       )
       VALUES ($1, $2, 'OWNER')
+      RETURNING id
     `,
     [workspaceId, userId],
   );
+
+  const row = result.rows[0];
+
+  if (row === undefined) {
+    throw new Error("Workspace membership insert did not return a row");
+  }
+
+  return row.id;
 }
 
 export async function findWorkspaceById(

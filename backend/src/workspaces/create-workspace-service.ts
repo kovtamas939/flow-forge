@@ -1,4 +1,5 @@
 import type { Pool } from "pg";
+import { insertAuditLog } from "../audit/audit-repository.js";
 import { withTransaction } from "../db/transaction.js";
 import {
   insertWorkspace,
@@ -50,11 +51,31 @@ export async function createWorkspace(
   return withTransaction(pool, async (client) => {
     const workspace = await insertWorkspace(client, name);
 
-    await insertWorkspaceOwnerMembership(
+    const membershipId = await insertWorkspaceOwnerMembership(
       client,
       workspace.id,
       ownerUserId,
     );
+
+    await insertAuditLog(client, {
+      workspaceId: workspace.id,
+      actorUserId: ownerUserId,
+      action: "WORKSPACE_CREATED",
+      targetType: "workspace",
+      targetId: workspace.id,
+      metadata: {},
+    });
+
+    await insertAuditLog(client, {
+      workspaceId: workspace.id,
+      actorUserId: ownerUserId,
+      action: "WORKSPACE_OWNER_MEMBERSHIP_CREATED",
+      targetType: "workspace_membership",
+      targetId: membershipId,
+      metadata: {
+        role: "OWNER",
+      },
+    });
 
     return workspace;
   });
