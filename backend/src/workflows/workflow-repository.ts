@@ -1,4 +1,5 @@
-import type { Pool } from "pg";
+import type { Pool, PoolClient } from "pg";
+import type { WorkflowDefinitionV1 } from "./workflow-definition.js";
 
 export type WorkflowStatus = "DRAFT" | "ACTIVE" | "DISABLED";
 
@@ -50,6 +51,14 @@ export type UpdateDraftWorkflowDefinitionInput = {
   workspaceId: string;
   workflowId: string;
   definition: unknown;
+};
+
+export type InsertWorkflowVersionInput = {
+  workflowId: string;
+  versionNumber: number;
+  schemaVersion: number;
+  definition: WorkflowDefinitionV1;
+  createdByUserId: string;
 };
 
 function mapWorkflowRow(row: WorkflowRow): Workflow {
@@ -152,4 +161,88 @@ export async function updateDraftWorkflowDefinition(
   const row = result.rows[0];
 
   return row === undefined ? null : mapDraftWorkflowRow(row);
+}
+
+export async function lockDraftWorkflowForActivation(
+  client: PoolClient,
+  workspaceId: string,
+  workflowId: string,
+): Promise<DraftWorkflow | null> {
+  const result = await client.query<DraftWorkflowRow>(
+    `
+      SELECT
+        id,
+        workspace_id,
+        name,
+        status,
+        draft_definition,
+        updated_at
+      FROM workflows
+      WHERE id = $1
+        AND workspace_id = $2
+        AND status = 'DRAFT'
+      FOR UPDATE
+    `,
+    [workflowId, workspaceId],
+  );
+
+  const row = result.rows[0];
+
+  return row === undefined ? null : mapDraftWorkflowRow(row);
+}
+
+export async function insertWorkflowVersion(
+  client: PoolClient,
+  input: InsertWorkflowVersionInput,
+): Promise<void> {
+  await client.query(
+    `
+      INSERT INTO workflow_versions (
+        workflow_id,
+        version_number,
+        schema_version,
+        definition,
+        created_by_user_id
+      )
+      VALUES ($1, $2, $3, $4::jsonb, $5)
+    `,
+    [
+      input.workflowId,
+      input.versionNumber,
+      input.schemaVersion,
+      JSON.stringify(input.definition),
+      input.createdByUserId,
+    ],
+  );
+}
+
+export async function markWorkflowActive(
+  client: PoolClient,
+  workspaceId: string,
+  workflowId: string,
+): Promise<Workflow | null> {
+  const result = await client.query<WorkflowRow>(
+    `
+      UPDATE workflows
+      SET
+        status = 'ACTIVE',
+        updated_at = NOW()
+      WHERE id = $1
+        AND workspace_id = $2
+        AND status = 'DRAFT'
+      RETURNING
+        id,
+        workspace_id,
+        name,
+        status,
+        created_by_user_id,
+        created_at,
+        updated_at
+    `,
+    [workflowId, workspaceId],
+  );
+
+  const row = result.rows[0];
+
+  return row === undefined ? null : mapWorkflowRow(row);
 }
