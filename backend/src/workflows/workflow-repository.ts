@@ -8,6 +8,7 @@ export type Workflow = {
   workspaceId: string;
   name: string;
   status: WorkflowStatus;
+  currentVersionId: string | null;
   createdByUserId: string | null;
   createdAt: Date;
   updatedAt: Date;
@@ -27,6 +28,7 @@ type WorkflowRow = {
   workspace_id: string;
   name: string;
   status: string;
+  current_version_id: string | null;
   created_by_user_id: string | null;
   created_at: Date;
   updated_at: Date;
@@ -39,6 +41,10 @@ type DraftWorkflowRow = {
   status: string;
   draft_definition: unknown;
   updated_at: Date;
+};
+
+type WorkflowVersionRow = {
+  id: string;
 };
 
 export type InsertDraftWorkflowInput = {
@@ -75,6 +81,7 @@ function mapWorkflowRow(row: WorkflowRow): Workflow {
     workspaceId: row.workspace_id,
     name: row.name,
     status: row.status,
+    currentVersionId: row.current_version_id,
     createdByUserId: row.created_by_user_id,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -114,6 +121,7 @@ export async function insertDraftWorkflow(
         workspace_id,
         name,
         status,
+        current_version_id,
         created_by_user_id,
         created_at,
         updated_at
@@ -194,8 +202,8 @@ export async function lockDraftWorkflowForActivation(
 export async function insertWorkflowVersion(
   client: PoolClient,
   input: InsertWorkflowVersionInput,
-): Promise<void> {
-  await client.query(
+): Promise<string> {
+  const result = await client.query<WorkflowVersionRow>(
     `
       INSERT INTO workflow_versions (
         workflow_id,
@@ -205,6 +213,7 @@ export async function insertWorkflowVersion(
         created_by_user_id
       )
       VALUES ($1, $2, $3, $4::jsonb, $5)
+      RETURNING id
     `,
     [
       input.workflowId,
@@ -214,18 +223,28 @@ export async function insertWorkflowVersion(
       input.createdByUserId,
     ],
   );
+
+  const row = result.rows[0];
+
+  if (row === undefined) {
+    throw new Error("Workflow version insert did not return a row");
+  }
+
+  return row.id;
 }
 
 export async function markWorkflowActive(
   client: PoolClient,
   workspaceId: string,
   workflowId: string,
+  currentVersionId: string,
 ): Promise<Workflow | null> {
   const result = await client.query<WorkflowRow>(
     `
       UPDATE workflows
       SET
         status = 'ACTIVE',
+        current_version_id = $3,
         updated_at = NOW()
       WHERE id = $1
         AND workspace_id = $2
@@ -235,11 +254,12 @@ export async function markWorkflowActive(
         workspace_id,
         name,
         status,
+        current_version_id,
         created_by_user_id,
         created_at,
         updated_at
     `,
-    [workflowId, workspaceId],
+    [workflowId, workspaceId, currentVersionId],
   );
 
   const row = result.rows[0];

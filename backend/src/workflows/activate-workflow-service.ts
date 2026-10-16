@@ -57,7 +57,7 @@ export async function activateWorkflow(
       };
     }
 
-    await insertWorkflowVersion(client, {
+    const currentVersionId = await insertWorkflowVersion(client, {
       workflowId: draft.id,
       versionNumber: 1,
       schemaVersion: validation.definition.schemaVersion,
@@ -69,6 +69,7 @@ export async function activateWorkflow(
       client,
       workspaceId,
       workflowId,
+      currentVersionId,
     );
 
     if (workflow === null) {

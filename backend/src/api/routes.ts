@@ -5,6 +5,7 @@ import { healthRoutes } from "./routes/health.js";
 import { workflowActivationRoutes } from "./routes/workflow-activation.js";
 import { workflowDraftRoutes } from "./routes/workflow-drafts.js";
 import { workflowRoutes } from "./routes/workflows.js";
+import { workflowVersionRoutes } from "./routes/workflow-versions.js";
 import { workspaceRoutes } from "./routes/workspaces.js";
 
 type RegisterRoutesOptions = {
@@ -31,6 +32,9 @@ export async function registerRoutes(
     pool: options.pool,
   });
   await app.register(workflowActivationRoutes, {
+    pool: options.pool,
+  });
+  await app.register(workflowVersionRoutes, {
     pool: options.pool,
   });
 }
