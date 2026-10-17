@@ -8,6 +8,7 @@ import {
   registerRequestIdHook,
   REQUEST_ID_HEADER,
 } from "./request-id.js";
+import { registerCsrfProtection } from "./csrf-protection.js";
 import { registerRoutes } from "./routes.js";
 
 type ErrorDetails = {
@@ -26,12 +27,14 @@ function getErrorDetails(error: unknown): ErrorDetails {
   const errorRecord = error as Record<string, unknown>;
 
   return {
-    name: typeof errorRecord.name === "string"
-      ? errorRecord.name
-      : "UnknownError",
-    statusCode: typeof errorRecord.statusCode === "number"
-      ? errorRecord.statusCode
-      : undefined,
+    name:
+      typeof errorRecord.name === "string"
+        ? errorRecord.name
+        : "UnknownError",
+    statusCode:
+      typeof errorRecord.statusCode === "number"
+        ? errorRecord.statusCode
+        : undefined,
   };
 }
 
@@ -52,6 +55,7 @@ function createErrorResponse(
 export async function buildApp(
   pool: Pool,
   secureCookies: boolean,
+  webhookEncryptionKey: Buffer,
 ): Promise<FastifyInstance> {
   const app = Fastify({
     logger: {
@@ -119,7 +123,13 @@ export async function buildApp(
   app.decorateRequest("currentUser", null);
 
   registerRequestIdHook(app);
-  await app.register(registerRoutes, { pool, secureCookies });
+  registerCsrfProtection(app);
+
+  await app.register(registerRoutes, {
+    pool,
+    secureCookies,
+    webhookEncryptionKey,
+  });
 
   return app;
 }

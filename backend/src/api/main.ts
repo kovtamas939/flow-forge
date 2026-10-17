@@ -10,7 +10,11 @@ try {
     await pingPool(pool);
 
     const secureCookies = config.nodeEnv === "production";
-    const app = await buildApp(pool, secureCookies);
+    const app = await buildApp(
+      pool,
+      secureCookies,
+      config.webhookEncryptionKey,
+    );
     let shutdownPromise: Promise<void> | undefined;
 
     const shutdown = (signal: string): Promise<void> => {
