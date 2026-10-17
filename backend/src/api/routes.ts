@@ -3,7 +3,10 @@ import type { Pool } from "pg";
 import { authRoutes } from "./routes/auth.js";
 import { healthRoutes } from "./routes/health.js";
 import { workflowActivationRoutes } from "./routes/workflow-activation.js";
+import { workflowDetailRoutes } from "./routes/workflow-detail.js";
 import { workflowDraftRoutes } from "./routes/workflow-drafts.js";
+import { workflowLifecycleRoutes } from "./routes/workflow-lifecycle.js";
+import { workflowListRoutes } from "./routes/workflow-list.js";
 import { workflowRoutes } from "./routes/workflows.js";
 import { workflowVersionRoutes } from "./routes/workflow-versions.js";
 import { workspaceRoutes } from "./routes/workspaces.js";
@@ -35,6 +38,15 @@ export async function registerRoutes(
     pool: options.pool,
   });
   await app.register(workflowVersionRoutes, {
+    pool: options.pool,
+  });
+  await app.register(workflowLifecycleRoutes, {
+    pool: options.pool,
+  });
+  await app.register(workflowListRoutes, {
+    pool: options.pool,
+  });
+  await app.register(workflowDetailRoutes, {
     pool: options.pool,
   });
 }
