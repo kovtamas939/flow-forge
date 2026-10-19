@@ -1,9 +1,8 @@
 import type { Pool } from "pg";
 import { decryptWebhookSecret } from "./webhook-secret-crypto.js";
-import {
-  findWebhookForSignatureVerification,
-} from "./webhook-signature-repository.js";
+import { findWebhookForSignatureVerification } from "./webhook-signature-repository.js";
 import { verifyWebhookSignature } from "./webhook-signature.js";
+import { isWebhookTimestampFresh } from "./webhook-timestamp.js";
 
 const SUPPORTED_ENCRYPTION_KEY_VERSION = 1;
 
@@ -14,6 +13,7 @@ export type VerifyWebhookRequestResult =
   | {
       valid: false;
       reason:
+        | "timestamp_out_of_range"
         | "webhook_not_found"
         | "webhook_disabled"
         | "workflow_not_active"
@@ -24,9 +24,18 @@ export async function verifyWebhookRequest(
   pool: Pool,
   webhookId: string,
   rawBody: Buffer,
+  timestampHeader: unknown,
+  eventIdHeader: unknown,
   signatureHeader: unknown,
   encryptionKey: Buffer,
 ): Promise<VerifyWebhookRequestResult> {
+  if (!isWebhookTimestampFresh(timestampHeader)) {
+    return {
+      valid: false,
+      reason: "timestamp_out_of_range",
+    };
+  }
+
   const webhook = await findWebhookForSignatureVerification(
     pool,
     webhookId,
@@ -74,6 +83,8 @@ export async function verifyWebhookRequest(
   const signatureIsValid = verifyWebhookSignature(
     secret,
     rawBody,
+    timestampHeader,
+    eventIdHeader,
     signatureHeader,
   );
 
