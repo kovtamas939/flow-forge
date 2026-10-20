@@ -17,6 +17,8 @@ const PUBLIC_AUTHENTICATION_PATHS: ReadonlySet<string> = new Set([
   "/api/v1/auth/login",
 ]);
 
+const PUBLIC_WEBHOOK_INGRESS_PREFIX = "/api/v1/webhooks/";
+
 const SESSION_TOKEN_PATTERN = /^[A-Za-z0-9_-]{43}$/;
 const CSRF_TOKEN_PATTERN = /^[A-Za-z0-9_-]{43}$/;
 
@@ -69,7 +71,10 @@ export function registerCsrfProtection(app: FastifyInstance): void {
 
     const requestPath = request.url.split("?")[0] ?? "";
 
-    if (PUBLIC_AUTHENTICATION_PATHS.has(requestPath)) {
+    if (
+      PUBLIC_AUTHENTICATION_PATHS.has(requestPath) ||
+      requestPath.startsWith(PUBLIC_WEBHOOK_INGRESS_PREFIX)
+    ) {
       return;
     }
 

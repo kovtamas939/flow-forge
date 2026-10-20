@@ -3,6 +3,7 @@ import type { Pool } from "pg";
 import { authRoutes } from "./routes/auth.js";
 import { csrfRoutes } from "./routes/csrf.js";
 import { healthRoutes } from "./routes/health.js";
+import { webhookIngressRoutes } from "./routes/webhook-ingress.js";
 import { workflowActivationRoutes } from "./routes/workflow-activation.js";
 import { workflowDetailRoutes } from "./routes/workflow-detail.js";
 import { workflowDraftRoutes } from "./routes/workflow-drafts.js";
@@ -56,6 +57,10 @@ export async function registerRoutes(
     pool: options.pool,
   });
   await app.register(workflowWebhookRoutes, {
+    pool: options.pool,
+    webhookEncryptionKey: options.webhookEncryptionKey,
+  });
+  await app.register(webhookIngressRoutes, {
     pool: options.pool,
     webhookEncryptionKey: options.webhookEncryptionKey,
   });
