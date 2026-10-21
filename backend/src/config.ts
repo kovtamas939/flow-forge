@@ -6,6 +6,8 @@ export type AppConfig = {
   port: number;
   databaseUrl: string;
   webhookEncryptionKey: Buffer;
+  redisHost: string;
+  redisPort: number;
 };
 
 export class ConfigError extends Error {
@@ -75,6 +77,26 @@ function parsePort(raw: string | undefined, errors: string[]): number {
   ) {
     errors.push("PORT must be an integer between 1 and 65535");
     return 3000;
+  }
+
+  return port;
+}
+
+function parseRedisPort(
+  raw: string | undefined,
+  errors: string[],
+): number {
+  const value = raw ?? "6379";
+  const port = Number.parseInt(value, 10);
+
+  if (
+    !Number.isInteger(port) ||
+    value !== String(port) ||
+    port < 1 ||
+    port > 65535
+  ) {
+    errors.push("REDIS_PORT must be an integer between 1 and 65535");
+    return 6379;
   }
 
   return port;
@@ -155,6 +177,11 @@ export function loadConfig(
     readOptional(env, "WEBHOOK_ENCRYPTION_KEY"),
     errors,
   );
+  const redisHost = parseHost(readOptional(env, "REDIS_HOST"), errors);
+  const redisPort = parseRedisPort(
+    readOptional(env, "REDIS_PORT"),
+    errors,
+  );
 
   if (errors.length > 0) {
     throw new ConfigError(
@@ -168,5 +195,7 @@ export function loadConfig(
     port,
     databaseUrl,
     webhookEncryptionKey,
+    redisHost,
+    redisPort,
   };
 }
