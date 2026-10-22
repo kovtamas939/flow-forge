@@ -1,93 +1,115 @@
-import { Worker } from "bullmq";
-import { Redis } from "ioredis";
 import { loadConfig } from "../config.js";
-import {
-  EVENT_QUEUE_NAME,
-  type EventJobData,
-} from "../queue/event-queue.js";
+import { closePool, createPool, pingPool } from "../db/pool.js";
+import { dispatchPendingOutboxEvents } from "../outbox/dispatch-pending-outbox-service.js";
+import { createEventQueue } from "../queue/event-queue.js";
+
+const DISPATCH_INTERVAL_MILLISECONDS = 1_000;
 
 async function main(): Promise<void> {
   const config = loadConfig();
-
-  const redisConnection = new Redis({
-    host: config.redisHost,
-    port: config.redisPort,
-    maxRetriesPerRequest: null,
-  });
-
-  const worker = new Worker<EventJobData>(
-    EVENT_QUEUE_NAME,
-    async () => {
-      throw new Error("Event processing needs to be implemented");
-    },
-    {
-      connection: redisConnection,
-      autorun: false,
-    },
-  );
-
-  worker.on("error", (error: Error) => {
-    console.error("Worker connection error", error);
-  });
+  const pool = createPool(config);
+  const eventQueue = createEventQueue(config);
 
   try {
-    await worker.waitUntilReady();
+    await pingPool(pool);
+    await eventQueue.queue.waitUntilReady();
+
+    console.info("Outbox dispatcher connected to PostgreSQL and Redis");
+
+    let shuttingDown = false;
+    let dispatchInProgress = false;
+    let currentDispatchPromise: Promise<void> = Promise.resolve();
+
+    const runDispatchCycle = (): void => {
+      if (shuttingDown || dispatchInProgress) {
+        return;
+      }
+
+      dispatchInProgress = true;
+
+      currentDispatchPromise = (async () => {
+        try {
+          const publishedCount = await dispatchPendingOutboxEvents(
+            pool,
+            eventQueue.queue,
+          );
+
+          if (publishedCount > 0) {
+            console.info(
+              { publishedCount },
+              "Published outbox events",
+            );
+          }
+        } catch (error: unknown) {
+          console.error("Outbox dispatch cycle failed", error);
+        } finally {
+          dispatchInProgress = false;
+        }
+      })();
+    };
+
+    runDispatchCycle();
+
+    const dispatchTimer = setInterval(
+      runDispatchCycle,
+      DISPATCH_INTERVAL_MILLISECONDS,
+    );
+
+    let shutdownPromise: Promise<void> | undefined;
+
+    const shutdown = (signal: string): Promise<void> => {
+      if (shutdownPromise !== undefined) {
+        return shutdownPromise;
+      }
+
+      shuttingDown = true;
+      clearInterval(dispatchTimer);
+
+      shutdownPromise = (async () => {
+        console.info({ signal }, "shutting down outbox dispatcher");
+
+        await currentDispatchPromise;
+
+        try {
+          await eventQueue.close();
+        } catch (error: unknown) {
+          console.error("Failed to close event queue", error);
+          process.exitCode = 1;
+        }
+
+        try {
+          await closePool(pool);
+        } catch (error: unknown) {
+          console.error("Failed to close database pool", error);
+          process.exitCode = 1;
+        }
+      })();
+
+      return shutdownPromise;
+    };
+
+    process.once("SIGINT", () => {
+      void shutdown("SIGINT");
+    });
+
+    process.once("SIGTERM", () => {
+      void shutdown("SIGTERM");
+    });
   } catch (error: unknown) {
     try {
-      await worker.close();
+      await eventQueue.close();
     } catch (cleanupError: unknown) {
-      console.error("Failed to close worker after startup error", cleanupError);
+      console.error("Failed to close event queue after startup error", cleanupError);
     }
 
     try {
-      await redisConnection.quit();
+      await closePool(pool);
     } catch (cleanupError: unknown) {
-      console.error(
-        "Failed to close Redis connection after startup error",
-        cleanupError,
-      );
+      console.error("Failed to close database pool after startup error", cleanupError);
     }
 
     throw error;
   }
-
-  console.info("Worker connected to Redis");
-
-  let shutdownPromise: Promise<void> | undefined;
-
-  const shutdown = (signal: string): Promise<void> => {
-    if (shutdownPromise !== undefined) {
-      return shutdownPromise;
-    }
-
-    shutdownPromise = (async () => {
-      console.info({ signal }, "shutting down worker");
-
-      try {
-        await worker.close();
-      } catch (error: unknown) {
-        console.error("Failed to close worker", error);
-        process.exitCode = 1;
-      }
-
-      try {
-        await redisConnection.quit();
-      } catch (error: unknown) {
-        console.error("Failed to close Redis connection", error);
-        process.exitCode = 1;
-      }
-    })();
-
-    return shutdownPromise;
-  };
-
-  process.once("SIGINT", () => {
-    void shutdown("SIGINT");
-  });
-
-  process.once("SIGTERM", () => {
-    void shutdown("SIGTERM");
-  });
 }
 
 void main().catch((error: unknown) => {
