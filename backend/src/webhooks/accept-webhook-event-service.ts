@@ -1,5 +1,6 @@
 import type { Pool } from "pg";
-import { insertWebhookEvent } from "./event-repository.js";
+import { withTransaction } from "../db/transaction.js";
+import { persistWebhookEventAndOutbox } from "./event-repository.js";
 import { verifyWebhookRequest } from "./verify-webhook-request-service.js";
 
 export type AcceptWebhookEventResult =
@@ -66,12 +67,14 @@ export async function acceptWebhookEvent(
     };
   }
 
-  const event = await insertWebhookEvent(
-    pool,
-    webhookId,
-    eventIdHeader,
-    payload,
-  );
+  const event = await withTransaction(pool, async (client) => {
+    return persistWebhookEventAndOutbox(
+      client,
+      webhookId,
+      eventIdHeader,
+      payload,
+    );
+  });
 
   return {
     accepted: true,

@@ -1,4 +1,4 @@
-import type { Pool } from "pg";
+import type { PoolClient } from "pg";
 
 type EventRow = {
   id: string;
@@ -17,13 +17,13 @@ function mapEventRow(row: EventRow): StoredWebhookEvent {
   };
 }
 
-export async function insertWebhookEvent(
-  pool: Pool,
+export async function persistWebhookEventAndOutbox(
+  client: PoolClient,
   webhookId: string,
   externalEventId: string,
   payload: unknown,
 ): Promise<StoredWebhookEvent> {
-  const insertResult = await pool.query<EventRow>(
+  const insertResult = await client.query<EventRow>(
     `
       INSERT INTO events (
         webhook_id,
@@ -37,30 +37,37 @@ export async function insertWebhookEvent(
     [webhookId, externalEventId, payload],
   );
 
-  const insertedRow = insertResult.rows[0];
+  let eventRow = insertResult.rows[0];
 
-  if (insertedRow !== undefined) {
-    return mapEventRow(insertedRow);
+  if (eventRow === undefined) {
+    const existingResult = await client.query<EventRow>(
+      `
+        SELECT id, received_at
+        FROM events
+        WHERE webhook_id = $1
+          AND external_event_id = $2
+        LIMIT 1
+      `,
+      [webhookId, externalEventId],
+    );
+
+    eventRow = existingResult.rows[0];
   }
 
-  const existingResult = await pool.query<EventRow>(
-    `
-      SELECT id, received_at
-      FROM events
-      WHERE webhook_id = $1
-        AND external_event_id = $2
-      LIMIT 1
-    `,
-    [webhookId, externalEventId],
-  );
-
-  const existingRow = existingResult.rows[0];
-
-  if (existingRow === undefined) {
+  if (eventRow === undefined) {
     throw new Error(
-      "Conflicting webhook event was not found after insert",
+      "Webhook event was not found after insert or conflict",
     );
   }
 
-  return mapEventRow(existingRow);
+  await client.query(
+    `
+      INSERT INTO event_outbox (event_id)
+      VALUES ($1)
+      ON CONFLICT (event_id) DO NOTHING
+    `,
+    [eventRow.id],
+  );
+
+  return mapEventRow(eventRow);
 }
