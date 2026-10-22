@@ -2,6 +2,7 @@ import { loadConfig } from "../config.js";
 import { closePool, createPool, pingPool } from "../db/pool.js";
 import { dispatchPendingOutboxEvents } from "../outbox/dispatch-pending-outbox-service.js";
 import { createEventQueue } from "../queue/event-queue.js";
+import { createEventWorker } from "../queue/event-worker.js";
 
 const DISPATCH_INTERVAL_MILLISECONDS = 1_000;
 
@@ -9,12 +10,14 @@ async function main(): Promise<void> {
   const config = loadConfig();
   const pool = createPool(config);
   const eventQueue = createEventQueue(config);
+  const eventWorker = createEventWorker(config, pool);
 
   try {
     await pingPool(pool);
     await eventQueue.queue.waitUntilReady();
+    await eventWorker.waitUntilReady();
 
-    console.info("Outbox dispatcher connected to PostgreSQL and Redis");
+    console.info("Outbox dispatcher and event consumer connected");
 
     let shuttingDown = false;
     let dispatchInProgress = false;
@@ -66,9 +69,16 @@ async function main(): Promise<void> {
       clearInterval(dispatchTimer);
 
       shutdownPromise = (async () => {
-        console.info({ signal }, "shutting down outbox dispatcher");
+        console.info({ signal }, "shutting down worker process");
 
         await currentDispatchPromise;
+
+        try {
+          await eventWorker.close();
+        } catch (error: unknown) {
+          console.error("Failed to close event worker", error);
+          process.exitCode = 1;
+        }
 
         try {
           await eventQueue.close();
@@ -97,15 +107,30 @@ async function main(): Promise<void> {
     });
   } catch (error: unknown) {
     try {
+      await eventWorker.close();
+    } catch (cleanupError: unknown) {
+      console.error(
+        "Failed to close event worker after startup error",
+        cleanupError,
+      );
+    }
+
+    try {
       await eventQueue.close();
     } catch (cleanupError: unknown) {
-      console.error("Failed to close event queue after startup error", cleanupError);
+      console.error(
+        "Failed to close event queue after startup error",
+        cleanupError,
+      );
     }
 
     try {
       await closePool(pool);
     } catch (cleanupError: unknown) {
-      console.error("Failed to close database pool after startup error", cleanupError);
+      console.error(
+        "Failed to close database pool after startup error",
+        cleanupError,
+      );
     }
 
     throw error;
