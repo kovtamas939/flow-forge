@@ -4,6 +4,13 @@ type EventIdRow = {
   id: string;
 };
 
+export class EventNotFoundError extends Error {
+  public constructor(eventId: string) {
+    super(`Event ${eventId} was not found`);
+    this.name = "EventNotFoundError";
+  }
+}
+
 export async function processEvent(
   pool: Pool,
   eventId: string,
@@ -17,12 +24,14 @@ export async function processEvent(
     [eventId],
   );
 
-  if (result.rows[0] === undefined) {
-    throw new Error(`Event ${eventId} was not found`);
+  const event = result.rows[0];
+
+  if (event === undefined) {
+    throw new EventNotFoundError(eventId);
   }
 
   console.info(
-    { eventId: result.rows[0].id },
+    { eventId: event.id },
     "Loaded durable event for processing",
   );
 }

@@ -5,6 +5,7 @@ import { createEventQueue } from "../queue/event-queue.js";
 import { createEventWorker } from "../queue/event-worker.js";
 
 const DISPATCH_INTERVAL_MILLISECONDS = 1_000;
+const WORKER_SHUTDOWN_GRACE_PERIOD_MILLISECONDS = 30_000;
 
 async function main(): Promise<void> {
   const config = loadConfig();
@@ -15,7 +16,7 @@ async function main(): Promise<void> {
   try {
     await pingPool(pool);
     await eventQueue.queue.waitUntilReady();
-    await eventWorker.waitUntilReady();
+    await eventWorker.worker.waitUntilReady();
 
     console.info("Outbox dispatcher and event consumer connected");
 
@@ -74,7 +75,16 @@ async function main(): Promise<void> {
         await currentDispatchPromise;
 
         try {
-          await eventWorker.close();
+          const drained = await eventWorker.closeGracefully(
+            WORKER_SHUTDOWN_GRACE_PERIOD_MILLISECONDS,
+          );
+
+          if (!drained) {
+            console.error(
+              "Worker shutdown grace period expired; active jobs may be retried",
+            );
+            process.exitCode = 1;
+          }
         } catch (error: unknown) {
           console.error("Failed to close event worker", error);
           process.exitCode = 1;
@@ -107,7 +117,7 @@ async function main(): Promise<void> {
     });
   } catch (error: unknown) {
     try {
-      await eventWorker.close();
+      await eventWorker.closeGracefully(0);
     } catch (cleanupError: unknown) {
       console.error(
         "Failed to close event worker after startup error",

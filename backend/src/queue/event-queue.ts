@@ -24,6 +24,14 @@ export function createEventQueue(
 
   const queue = new Queue<EventJobData>(EVENT_QUEUE_NAME, {
     connection,
+    defaultJobOptions: {
+      attempts: 5,
+      backoff: {
+        type: "exponential",
+        delay: 1_000,
+        jitter: 0.5,
+      },
+    },
   });
 
   return {
