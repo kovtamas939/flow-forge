@@ -1,8 +1,5 @@
 import type { Pool } from "pg";
-
-type EventIdRow = {
-  id: string;
-};
+import { loadPinnedEventWorkflowDefinition } from "../workflows/load-pinned-event-workflow-definition-service.js";
 
 export class EventNotFoundError extends Error {
   public constructor(eventId: string) {
@@ -11,27 +8,54 @@ export class EventNotFoundError extends Error {
   }
 }
 
+export class PermanentEventProcessingError extends Error {
+  public constructor(message: string) {
+    super(message);
+    this.name = "PermanentEventProcessingError";
+  }
+}
+
 export async function processEvent(
   pool: Pool,
   eventId: string,
 ): Promise<void> {
-  const result = await pool.query<EventIdRow>(
-    `
-      SELECT id
-      FROM events
-      WHERE id = $1
-    `,
-    [eventId],
-  );
+  const result = await loadPinnedEventWorkflowDefinition(pool, eventId);
 
-  const event = result.rows[0];
+  switch (result.status) {
+    case "event_not_found":
+      throw new EventNotFoundError(eventId);
 
-  if (event === undefined) {
-    throw new EventNotFoundError(eventId);
+    case "version_not_pinned":
+      throw new PermanentEventProcessingError(
+        `Event ${result.eventId} has no pinned workflow version`,
+      );
+
+    case "version_not_found":
+      throw new PermanentEventProcessingError(
+        `Pinned workflow version ${result.workflowVersionId} was not found`,
+      );
+
+    case "invalid_definition":
+      throw new PermanentEventProcessingError(
+        `Workflow version ${result.workflowVersionId} has an invalid definition with ${result.issues.length} validation issue(s)`,
+      );
+
+    case "schema_version_mismatch":
+      throw new PermanentEventProcessingError(
+        `Workflow version ${result.workflowVersionId} has database schema version ${result.databaseSchemaVersion}, but definition schema version ${result.definitionSchemaVersion}`,
+      );
+
+    case "loaded":
+      console.info(
+        {
+          eventId: result.eventId,
+          workflowId: result.workflowId,
+          workflowVersionId: result.workflowVersionId,
+          versionNumber: result.versionNumber,
+          schemaVersion: result.schemaVersion,
+        },
+        "Loaded pinned workflow version for event processing",
+      );
+      return;
   }
-
-  console.info(
-    { eventId: event.id },
-    "Loaded durable event for processing",
-  );
 }

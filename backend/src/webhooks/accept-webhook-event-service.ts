@@ -67,7 +67,7 @@ export async function acceptWebhookEvent(
     };
   }
 
-  const event = await withTransaction(pool, async (client) => {
+  const result = await withTransaction(pool, async (client) => {
     return persistWebhookEventAndOutbox(
       client,
       webhookId,
@@ -76,11 +76,18 @@ export async function acceptWebhookEvent(
     );
   });
 
+  if (!result.stored) {
+    return {
+      accepted: false,
+      reason: result.reason,
+    };
+  }
+
   return {
     accepted: true,
     event: {
-      id: event.id,
-      receivedAt: event.receivedAt,
+      id: result.event.id,
+      receivedAt: result.event.receivedAt,
     },
   };
 }
