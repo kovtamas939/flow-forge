@@ -3,10 +3,10 @@ import type {
   WorkflowJsonScalar,
 } from "./workflow-definition.js";
 
-export type BasicWorkflowCondition = Extract<
+export type WorkflowConditionWithoutContains = Exclude<
   WorkflowCondition,
   {
-    operator: "exists" | "equals" | "not_equals";
+    operator: "contains";
   }
 >;
 
@@ -86,8 +86,12 @@ function isJsonScalar(value: unknown): value is WorkflowJsonScalar {
   );
 }
 
-export function evaluateBasicCondition(
-  condition: BasicWorkflowCondition,
+function isFiniteNumber(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value);
+}
+
+export function evaluateWorkflowCondition(
+  condition: WorkflowConditionWithoutContains,
   payload: unknown,
 ): boolean {
   const lookup = lookupJsonPointer(payload, condition.path);
@@ -96,15 +100,49 @@ export function evaluateBasicCondition(
     return lookup.found;
   }
 
-  if (!lookup.found || !isJsonScalar(lookup.value)) {
+  if (!lookup.found) {
     return false;
   }
 
   switch (condition.operator) {
     case "equals":
-      return lookup.value === condition.value;
+      return (
+        isJsonScalar(lookup.value) &&
+        lookup.value === condition.value
+      );
 
     case "not_equals":
-      return lookup.value !== condition.value;
+      return (
+        isJsonScalar(lookup.value) &&
+        lookup.value !== condition.value
+      );
+
+    case "greater_than":
+      return (
+        isFiniteNumber(lookup.value) &&
+        isFiniteNumber(condition.value) &&
+        lookup.value > condition.value
+      );
+
+    case "greater_than_or_equal":
+      return (
+        isFiniteNumber(lookup.value) &&
+        isFiniteNumber(condition.value) &&
+        lookup.value >= condition.value
+      );
+
+    case "less_than":
+      return (
+        isFiniteNumber(lookup.value) &&
+        isFiniteNumber(condition.value) &&
+        lookup.value < condition.value
+      );
+
+    case "less_than_or_equal":
+      return (
+        isFiniteNumber(lookup.value) &&
+        isFiniteNumber(condition.value) &&
+        lookup.value <= condition.value
+      );
   }
 }
