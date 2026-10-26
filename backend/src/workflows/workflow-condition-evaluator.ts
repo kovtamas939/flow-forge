@@ -3,13 +3,6 @@ import type {
   WorkflowJsonScalar,
 } from "./workflow-definition.js";
 
-export type WorkflowConditionWithoutContains = Exclude<
-  WorkflowCondition,
-  {
-    operator: "contains";
-  }
->;
-
 type JsonPointerLookup =
   | {
       found: true;
@@ -91,7 +84,7 @@ function isFiniteNumber(value: unknown): value is number {
 }
 
 export function evaluateWorkflowCondition(
-  condition: WorkflowConditionWithoutContains,
+  condition: WorkflowCondition,
   payload: unknown,
 ): boolean {
   const lookup = lookupJsonPointer(payload, condition.path);
@@ -144,5 +137,23 @@ export function evaluateWorkflowCondition(
         isFiniteNumber(condition.value) &&
         lookup.value <= condition.value
       );
+
+    case "contains":
+      if (typeof lookup.value === "string") {
+        return (
+          typeof condition.value === "string" &&
+          lookup.value.includes(condition.value)
+        );
+      }
+
+      if (Array.isArray(lookup.value)) {
+        return lookup.value.some(
+          (item) =>
+            isJsonScalar(item) &&
+            item === condition.value,
+        );
+      }
+
+      return false;
   }
 }
