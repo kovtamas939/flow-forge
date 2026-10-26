@@ -42,6 +42,7 @@ export type LoadPinnedEventWorkflowDefinitionResult =
       versionNumber: number;
       schemaVersion: number;
       definition: WorkflowDefinitionV1;
+      payload: unknown;
     };
 
 export async function loadPinnedEventWorkflowDefinition(
@@ -83,5 +84,6 @@ export async function loadPinnedEventWorkflowDefinition(
     versionNumber: lookup.versionNumber,
     schemaVersion: lookup.schemaVersion,
     definition: validation.definition,
+    payload: lookup.payload,
   };
 }

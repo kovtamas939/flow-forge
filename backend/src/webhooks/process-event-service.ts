@@ -1,7 +1,6 @@
 import type { Pool } from "pg";
-import {
-  getOrCreateExecutionForEvent,
-} from "../executions/execution-service.js";
+import { runWorkflowForExecution } from "../executions/run-workflow-service.js";
+import { getOrCreateExecutionForEvent } from "../executions/execution-service.js";
 import { loadPinnedEventWorkflowDefinition } from "../workflows/load-pinned-event-workflow-definition-service.js";
 
 export class EventNotFoundError extends Error {
@@ -76,19 +75,56 @@ export async function processEvent(
         );
       }
 
+      break;
+  }
+
+  const runResult = await runWorkflowForExecution(pool, {
+    execution: executionResult.execution,
+    definition: result.definition,
+    payload: result.payload,
+  });
+
+  switch (runResult.status) {
+    case "completed":
       console.info(
         {
           eventId: result.eventId,
-          workflowId: result.workflowId,
-          workflowVersionId: result.workflowVersionId,
-          versionNumber: result.versionNumber,
-          schemaVersion: result.schemaVersion,
+          executionId: executionResult.execution.id,
+        },
+        "Workflow execution completed",
+      );
+      return;
+
+    case "failed":
+      console.error(
+        {
+          eventId: result.eventId,
+          executionId: executionResult.execution.id,
+          errorCode: runResult.errorCode,
+          errorMessage: runResult.errorMessage,
+        },
+        "Workflow execution failed",
+      );
+      return;
+
+    case "already_terminal":
+      console.info(
+        {
+          eventId: result.eventId,
           executionId: executionResult.execution.id,
           executionStatus: executionResult.execution.status,
-          attemptCount: executionResult.execution.attemptCount,
-          executionCreated: executionResult.created,
         },
-        "Prepared durable execution for pinned workflow version",
+        "Ignoring duplicate delivery for terminal execution",
+      );
+      return;
+
+    case "state_changed":
+      console.info(
+        {
+          eventId: result.eventId,
+          executionId: executionResult.execution.id,
+        },
+        "Execution state changed before workflow processing",
       );
       return;
   }

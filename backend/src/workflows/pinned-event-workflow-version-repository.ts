@@ -4,6 +4,7 @@ type PinnedWorkflowVersionRow = {
   event_id: string;
   workflow_id: string;
   event_workflow_version_id: string | null;
+  event_payload: unknown;
   workflow_version_id: string | null;
   version_number: number | null;
   schema_version: number | null;
@@ -33,6 +34,7 @@ export type PinnedWorkflowVersionLookup =
       versionNumber: number;
       schemaVersion: number;
       definition: unknown;
+      payload: unknown;
     };
 
 export async function findPinnedWorkflowVersionForEvent(
@@ -45,6 +47,7 @@ export async function findPinnedWorkflowVersionForEvent(
         events.id AS event_id,
         events.workflow_id,
         events.workflow_version_id AS event_workflow_version_id,
+        events.payload AS event_payload,
         workflow_versions.id AS workflow_version_id,
         workflow_versions.version_number,
         workflow_versions.schema_version,
@@ -95,5 +98,6 @@ export async function findPinnedWorkflowVersionForEvent(
     versionNumber: row.version_number,
     schemaVersion: row.schema_version,
     definition: row.definition,
+    payload: row.event_payload,
   };
 }
