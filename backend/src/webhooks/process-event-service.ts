@@ -1,6 +1,15 @@
 import type { Pool } from "pg";
 import { runWorkflowForExecution } from "../executions/run-workflow-service.js";
 import { getOrCreateExecutionForEvent } from "../executions/execution-service.js";
+import {
+  createHttpRequestAdapter,
+} from "../workflows/actions/http-request-adapter.js";
+import {
+  createUnconfiguredNotificationAdapter,
+} from "../workflows/actions/notification-adapter.js";
+import type {
+  WorkflowActionAdapters,
+} from "../executions/run-workflow-service.js";
 import { loadPinnedEventWorkflowDefinition } from "../workflows/load-pinned-event-workflow-definition-service.js";
 
 export class EventNotFoundError extends Error {
@@ -17,9 +26,15 @@ export class PermanentEventProcessingError extends Error {
   }
 }
 
+const DEFAULT_ACTION_ADAPTERS: WorkflowActionAdapters = {
+  httpRequest: createHttpRequestAdapter(),
+  notification: createUnconfiguredNotificationAdapter(),
+};
+
 export async function processEvent(
   pool: Pool,
   eventId: string,
+  actionAdapters: WorkflowActionAdapters = DEFAULT_ACTION_ADAPTERS,
 ): Promise<void> {
   const result = await loadPinnedEventWorkflowDefinition(pool, eventId);
 
@@ -82,6 +97,7 @@ export async function processEvent(
     execution: executionResult.execution,
     definition: result.definition,
     payload: result.payload,
+    actionAdapters,
   });
 
   switch (runResult.status) {

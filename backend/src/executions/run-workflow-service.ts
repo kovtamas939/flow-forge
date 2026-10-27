@@ -6,15 +6,26 @@ import {
   type ExecutionStepDefinition,
   type ExecutionStepRecord,
 } from "./execution-step-repository.js";
-import {
-  transitionExecution,
-} from "./execution-service.js";
+import { transitionExecution } from "./execution-service.js";
 import type { ExecutionRecord } from "./execution-repository.js";
+import {
+  HttpActionError,
+  type HttpRequestAdapter,
+} from "../workflows/actions/http-request-adapter.js";
+import {
+  NotificationProviderNotConfiguredError,
+  type NotificationAdapter,
+} from "../workflows/actions/notification-adapter.js";
 import { evaluateWorkflowCondition } from "../workflows/workflow-condition-evaluator.js";
 import type {
   WorkflowAction,
   WorkflowDefinitionV1,
 } from "../workflows/workflow-definition.js";
+
+export type WorkflowActionAdapters = {
+  httpRequest: HttpRequestAdapter;
+  notification: NotificationAdapter;
+};
 
 export type RunWorkflowResult =
   | {
@@ -115,23 +126,23 @@ async function startExecution(
   return transition.transitioned ? "started" : "state_changed";
 }
 
-async function failUnsupportedAction(
+async function failAction(
   pool: Pool,
   executionId: string,
   action: WorkflowAction,
   laterActions: WorkflowAction[],
+  error: {
+    code: string;
+    message: string;
+  },
 ): Promise<RunWorkflowResult> {
-  const errorCode = "ACTION_NOT_IMPLEMENTED";
-  const errorMessage =
-    `Action type "${action.type}" is not implemented yet`;
-
   await recordStepOutcome(pool, {
     executionId,
     stepId: action.id,
     status: "FAILED",
     result: {
-      errorCode,
-      message: errorMessage,
+      errorCode: error.code,
+      message: error.message,
     },
   });
 
@@ -151,8 +162,8 @@ async function failUnsupportedAction(
     executionId,
     expectedStatus: "RUNNING",
     nextStatus: "FAILED",
-    errorCode,
-    errorMessage,
+    errorCode: error.code,
+    errorMessage: error.message,
   });
 
   if (!transition.transitioned) {
@@ -163,9 +174,29 @@ async function failUnsupportedAction(
 
   return {
     status: "failed",
-    errorCode,
-    errorMessage,
+    errorCode: error.code,
+    errorMessage: error.message,
   };
+}
+
+function getPermanentActionError(
+  error: unknown,
+): { code: string; message: string } | undefined {
+  if (error instanceof HttpActionError && !error.retryable) {
+    return {
+      code: error.code,
+      message: error.message,
+    };
+  }
+
+  if (error instanceof NotificationProviderNotConfiguredError) {
+    return {
+      code: error.code,
+      message: "No notification provider is configured",
+    };
+  }
+
+  return undefined;
 }
 
 export async function runWorkflowForExecution(
@@ -174,6 +205,7 @@ export async function runWorkflowForExecution(
     execution: ExecutionRecord;
     definition: WorkflowDefinitionV1;
     payload: unknown;
+    actionAdapters: WorkflowActionAdapters;
   },
 ): Promise<RunWorkflowResult> {
   const startResult = await startExecution(pool, input.execution);
@@ -294,35 +326,79 @@ export async function runWorkflowForExecution(
         );
       }
 
-      if (action.type !== "log") {
-        return failUnsupportedAction(
+      try {
+        if (action.type === "log") {
+          console.info(
+            {
+              executionId: input.execution.id,
+              eventId: input.execution.eventId,
+              stepId: action.id,
+              message: action.message,
+            },
+            "Workflow log action",
+          );
+
+          await recordStepOutcome(pool, {
+            executionId: input.execution.id,
+            stepId: action.id,
+            status: "COMPLETED",
+            result: {
+              logged: true,
+            },
+          });
+
+          continue;
+        }
+
+        if (action.type === "notification") {
+          await input.actionAdapters.notification.deliver({
+            executionId: input.execution.id,
+            stepId: action.id,
+            recipient: action.recipient,
+            message: action.message,
+          });
+
+          await recordStepOutcome(pool, {
+            executionId: input.execution.id,
+            stepId: action.id,
+            status: "COMPLETED",
+            result: {
+              delivered: true,
+            },
+          });
+
+          continue;
+        }
+
+        const outcome = await input.actionAdapters.httpRequest.execute({
+          executionId: input.execution.id,
+          stepId: action.id,
+          action,
+        });
+
+        await recordStepOutcome(pool, {
+          executionId: input.execution.id,
+          stepId: action.id,
+          status: "COMPLETED",
+          result: {
+            statusCode: outcome.statusCode,
+          },
+        });
+      } catch (error: unknown) {
+        const permanentError = getPermanentActionError(error);
+
+        if (permanentError === undefined) {
+          throw error;
+        }
+
+        return failAction(
           pool,
           input.execution.id,
           action,
           input.definition.actions.slice(index + 1),
+          permanentError,
         );
       }
-
-      console.info(
-        {
-          executionId: input.execution.id,
-          eventId: input.execution.eventId,
-          stepId: action.id,
-          message: action.message,
-        },
-        "Workflow log action",
-      );
-
-      const completedStep = await recordStepOutcome(pool, {
-        executionId: input.execution.id,
-        stepId: action.id,
-        status: "COMPLETED",
-        result: {
-          logged: true,
-        },
-      });
-
-      stepsById.set(action.id, completedStep);
     }
   }
 

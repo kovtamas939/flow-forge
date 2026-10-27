@@ -3,6 +3,8 @@ import { closePool, createPool, pingPool } from "../db/pool.js";
 import { dispatchPendingOutboxEvents } from "../outbox/dispatch-pending-outbox-service.js";
 import { createEventQueue } from "../queue/event-queue.js";
 import { createEventWorker } from "../queue/event-worker.js";
+import { createHttpRequestAdapter } from "../workflows/actions/http-request-adapter.js";
+import { createUnconfiguredNotificationAdapter } from "../workflows/actions/notification-adapter.js";
 
 const DISPATCH_INTERVAL_MILLISECONDS = 1_000;
 const WORKER_SHUTDOWN_GRACE_PERIOD_MILLISECONDS = 30_000;
@@ -11,7 +13,15 @@ async function main(): Promise<void> {
   const config = loadConfig();
   const pool = createPool(config);
   const eventQueue = createEventQueue(config);
-  const eventWorker = createEventWorker(config, pool);
+  const actionAdapters = {
+    httpRequest: createHttpRequestAdapter(),
+    notification: createUnconfiguredNotificationAdapter(),
+  };
+  const eventWorker = createEventWorker(
+    config,
+    pool,
+    actionAdapters,
+  );
 
   try {
     await pingPool(pool);

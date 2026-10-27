@@ -1,6 +1,8 @@
 import { UnrecoverableError, Worker } from "bullmq";
 import type { Pool } from "pg";
 import type { AppConfig } from "../config.js";
+import type { WorkflowActionAdapters } from "../executions/run-workflow-service.js";
+import { HttpActionError } from "../workflows/actions/http-request-adapter.js";
 import {
   EventNotFoundError,
   processEvent,
@@ -51,6 +53,10 @@ function getErrorCode(error: unknown): string | undefined {
 }
 
 function isRetryableError(error: unknown): boolean {
+  if (error instanceof HttpActionError) {
+    return error.retryable;
+  }
+
   const errorCode = getErrorCode(error);
 
   if (errorCode === undefined) {
@@ -77,6 +83,7 @@ function toUnrecoverableError(error: unknown): UnrecoverableError {
 export function createEventWorker(
   config: AppConfig,
   pool: Pool,
+  actionAdapters: WorkflowActionAdapters,
 ): EventWorkerHandle {
   let activeJobCount = 0;
   let notifyWhenIdle: (() => void) | undefined;
@@ -94,7 +101,11 @@ export function createEventWorker(
         }
 
         try {
-          await processEvent(pool, job.data.eventId);
+          await processEvent(
+            pool,
+            job.data.eventId,
+            actionAdapters,
+          );
         } catch (error: unknown) {
           if (error instanceof EventNotFoundError) {
             throw new UnrecoverableError(error.message);
