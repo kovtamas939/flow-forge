@@ -225,3 +225,210 @@ export async function finishExecutionStep(
     status: "conflict",
   };
 }
+
+export type ExecutionStepAttemptStatus =
+  | "RUNNING"
+  | "SUCCEEDED"
+  | "FAILED";
+
+export type ExecutionStepAttemptRecord = {
+  id: string;
+  executionStepId: string;
+  attemptNumber: number;
+  status: ExecutionStepAttemptStatus;
+  retryable: boolean | null;
+  result: unknown;
+  errorCode: string | null;
+  failureSummary: string | null;
+  startedAt: Date;
+  finishedAt: Date | null;
+};
+
+type ExecutionStepAttemptRow = {
+  id: string;
+  execution_step_id: string;
+  attempt_number: number;
+  status: ExecutionStepAttemptStatus;
+  retryable: boolean | null;
+  result: unknown;
+  error_code: string | null;
+  failure_summary: string | null;
+  started_at: Date;
+  finished_at: Date | null;
+};
+
+function mapExecutionStepAttemptRow(
+  row: ExecutionStepAttemptRow,
+): ExecutionStepAttemptRecord {
+  return {
+    id: row.id,
+    executionStepId: row.execution_step_id,
+    attemptNumber: row.attempt_number,
+    status: row.status,
+    retryable: row.retryable,
+    result: row.result,
+    errorCode: row.error_code,
+    failureSummary: row.failure_summary,
+    startedAt: row.started_at,
+    finishedAt: row.finished_at,
+  };
+}
+
+export async function beginExecutionStepAttempt(
+  client: PoolClient,
+  executionStepId: string,
+): Promise<ExecutionStepAttemptRecord> {
+  const stepResult = await client.query<{
+    id: string;
+    status: ExecutionStepStatus;
+  }>(
+    `
+      SELECT id, status
+      FROM execution_steps
+      WHERE id = $1
+      FOR UPDATE
+    `,
+    [executionStepId],
+  );
+
+  const step = stepResult.rows[0];
+
+  if (step === undefined) {
+    throw new Error(
+      `Execution step ${executionStepId} was not found`,
+    );
+  }
+
+  if (step.status !== "PENDING") {
+    throw new Error(
+      `Cannot begin an attempt for execution step ${executionStepId} with status ${step.status}`,
+    );
+  }
+
+  const nextAttemptResult = await client.query<{
+    next_attempt_number: number;
+  }>(
+    `
+      SELECT COALESCE(MAX(attempt_number), 0) + 1 AS next_attempt_number
+      FROM execution_step_attempts
+      WHERE execution_step_id = $1
+    `,
+    [executionStepId],
+  );
+
+  const nextAttemptNumber =
+    nextAttemptResult.rows[0]?.next_attempt_number;
+
+  if (nextAttemptNumber === undefined) {
+    throw new Error(
+      `Could not determine the next attempt number for execution step ${executionStepId}`,
+    );
+  }
+
+  const insertResult = await client.query<ExecutionStepAttemptRow>(
+    `
+      INSERT INTO execution_step_attempts (
+        execution_step_id,
+        attempt_number
+      )
+      VALUES ($1, $2)
+      RETURNING
+        id,
+        execution_step_id,
+        attempt_number,
+        status,
+        retryable,
+        result,
+        error_code,
+        failure_summary,
+        started_at,
+        finished_at
+    `,
+    [executionStepId, nextAttemptNumber],
+  );
+
+  const attempt = insertResult.rows[0];
+
+  if (attempt === undefined) {
+    throw new Error(
+      `Could not create an attempt for execution step ${executionStepId}`,
+    );
+  }
+
+  return mapExecutionStepAttemptRow(attempt);
+}
+
+export type FinishExecutionStepAttemptInput =
+  | {
+      attemptId: string;
+      status: "SUCCEEDED";
+      result: Record<string, unknown>;
+    }
+  | {
+      attemptId: string;
+      status: "FAILED";
+      retryable: boolean;
+      errorCode: string;
+      failureSummary: string;
+    };
+
+export async function finishExecutionStepAttempt(
+  client: PoolClient,
+  input: FinishExecutionStepAttemptInput,
+): Promise<ExecutionStepAttemptRecord> {
+  const serializedResult =
+    input.status === "SUCCEEDED"
+      ? JSON.stringify(input.result)
+      : null;
+  const retryable =
+    input.status === "SUCCEEDED" ? false : input.retryable;
+  const errorCode =
+    input.status === "SUCCEEDED" ? null : input.errorCode;
+  const failureSummary =
+    input.status === "SUCCEEDED" ? null : input.failureSummary;
+
+  const result = await client.query<ExecutionStepAttemptRow>(
+    `
+      UPDATE execution_step_attempts
+      SET
+        status = $2,
+        retryable = $3,
+        result = $4::jsonb,
+        error_code = $5,
+        failure_summary = $6,
+        finished_at = NOW(),
+        updated_at = NOW()
+      WHERE id = $1
+        AND status = 'RUNNING'
+      RETURNING
+        id,
+        execution_step_id,
+        attempt_number,
+        status,
+        retryable,
+        result,
+        error_code,
+        failure_summary,
+        started_at,
+        finished_at
+    `,
+    [
+      input.attemptId,
+      input.status,
+      retryable,
+      serializedResult,
+      errorCode,
+      failureSummary,
+    ],
+  );
+
+  const attempt = result.rows[0];
+
+  if (attempt === undefined) {
+    throw new Error(
+      `Running attempt ${input.attemptId} was not found`,
+    );
+  }
+
+  return mapExecutionStepAttemptRow(attempt);
+}

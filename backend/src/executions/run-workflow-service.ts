@@ -1,8 +1,10 @@
 import type { Pool } from "pg";
 import { withTransaction } from "../db/transaction.js";
 import {
+  beginExecutionStepAttempt,
   ensureExecutionSteps,
   finishExecutionStep,
+  finishExecutionStepAttempt,
   type ExecutionStepDefinition,
   type ExecutionStepRecord,
 } from "./execution-step-repository.js";
@@ -42,6 +44,12 @@ export type RunWorkflowResult =
   | {
       status: "state_changed";
     };
+
+type SafeActionFailure = {
+  code: string;
+  summary: string;
+  retryable: boolean;
+};
 
 function getStepDefinitions(
   definition: WorkflowDefinitionV1,
@@ -102,6 +110,149 @@ async function recordStepOutcome(
   return outcome.step;
 }
 
+async function startActionAttempt(
+  pool: Pool,
+  executionStepId: string,
+): Promise<{ id: string }> {
+  return withTransaction(pool, async (client) => {
+    const attempt = await beginExecutionStepAttempt(
+      client,
+      executionStepId,
+    );
+
+    return {
+      id: attempt.id,
+    };
+  });
+}
+
+async function finishSuccessfulActionAttempt(
+  pool: Pool,
+  input: {
+    attemptId: string;
+    executionId: string;
+    stepId: string;
+    result: Record<string, unknown>;
+  },
+): Promise<ExecutionStepRecord> {
+  return withTransaction(pool, async (client) => {
+    await finishExecutionStepAttempt(client, {
+      attemptId: input.attemptId,
+      status: "SUCCEEDED",
+      result: input.result,
+    });
+
+    const outcome = await finishExecutionStep(client, {
+      executionId: input.executionId,
+      stepId: input.stepId,
+      status: "COMPLETED",
+      result: input.result,
+    });
+
+    if (outcome.status === "conflict") {
+      throw new Error(
+        `Execution step ${input.stepId} has a conflicting stored outcome`,
+      );
+    }
+
+    return outcome.step;
+  });
+}
+
+async function finishFailedActionAttempt(
+  pool: Pool,
+  attemptId: string,
+  failure: SafeActionFailure,
+): Promise<void> {
+  await withTransaction(pool, async (client) => {
+    await finishExecutionStepAttempt(client, {
+      attemptId,
+      status: "FAILED",
+      retryable: failure.retryable,
+      errorCode: failure.code,
+      failureSummary: failure.summary,
+    });
+  });
+}
+
+function toSafeActionFailure(error: unknown): SafeActionFailure {
+  if (error instanceof HttpActionError) {
+    const safeCode = /^[A-Z0-9_]{1,100}$/.test(error.code)
+      ? error.code
+      : "HTTP_ACTION_FAILED";
+
+    return {
+      code: safeCode,
+      summary: error.retryable
+        ? "The HTTP action failed because of a temporary network or server error."
+        : "The HTTP action failed a destination or response policy.",
+      retryable: error.retryable,
+    };
+  }
+
+  if (error instanceof NotificationProviderNotConfiguredError) {
+    return {
+      code: "NOTIFICATION_PROVIDER_NOT_CONFIGURED",
+      summary: "No notification provider is configured.",
+      retryable: false,
+    };
+  }
+
+  return {
+    code: "ACTION_EXECUTION_FAILED",
+    summary: "The action failed because of an unexpected adapter error.",
+    retryable: false,
+  };
+}
+
+async function executeAction(
+  action: WorkflowAction,
+  input: {
+    executionId: string;
+    eventId: string;
+    actionAdapters: WorkflowActionAdapters;
+  },
+): Promise<Record<string, unknown>> {
+  if (action.type === "log") {
+    console.info(
+      {
+        executionId: input.executionId,
+        eventId: input.eventId,
+        stepId: action.id,
+        message: action.message,
+      },
+      "Workflow log action",
+    );
+
+    return {
+      logged: true,
+    };
+  }
+
+  if (action.type === "notification") {
+    await input.actionAdapters.notification.deliver({
+      executionId: input.executionId,
+      stepId: action.id,
+      recipient: action.recipient,
+      message: action.message,
+    });
+
+    return {
+      delivered: true,
+    };
+  }
+
+  const outcome = await input.actionAdapters.httpRequest.execute({
+    executionId: input.executionId,
+    stepId: action.id,
+    action,
+  });
+
+  return {
+    statusCode: outcome.statusCode,
+  };
+}
+
 async function startExecution(
   pool: Pool,
   execution: ExecutionRecord,
@@ -131,18 +282,15 @@ async function failAction(
   executionId: string,
   action: WorkflowAction,
   laterActions: WorkflowAction[],
-  error: {
-    code: string;
-    message: string;
-  },
+  failure: SafeActionFailure,
 ): Promise<RunWorkflowResult> {
   await recordStepOutcome(pool, {
     executionId,
     stepId: action.id,
     status: "FAILED",
     result: {
-      errorCode: error.code,
-      message: error.message,
+      errorCode: failure.code,
+      message: failure.summary,
     },
   });
 
@@ -162,8 +310,8 @@ async function failAction(
     executionId,
     expectedStatus: "RUNNING",
     nextStatus: "FAILED",
-    errorCode: error.code,
-    errorMessage: error.message,
+    errorCode: failure.code,
+    errorMessage: failure.summary,
   });
 
   if (!transition.transitioned) {
@@ -174,29 +322,9 @@ async function failAction(
 
   return {
     status: "failed",
-    errorCode: error.code,
-    errorMessage: error.message,
+    errorCode: failure.code,
+    errorMessage: failure.summary,
   };
-}
-
-function getPermanentActionError(
-  error: unknown,
-): { code: string; message: string } | undefined {
-  if (error instanceof HttpActionError && !error.retryable) {
-    return {
-      code: error.code,
-      message: error.message,
-    };
-  }
-
-  if (error instanceof NotificationProviderNotConfiguredError) {
-    return {
-      code: error.code,
-      message: "No notification provider is configured",
-    };
-  }
-
-  return undefined;
 }
 
 export async function runWorkflowForExecution(
@@ -326,68 +454,25 @@ export async function runWorkflowForExecution(
         );
       }
 
+      const attempt = await startActionAttempt(pool, existingStep.id);
+      let actionResult: Record<string, unknown>;
+
       try {
-        if (action.type === "log") {
-          console.info(
-            {
-              executionId: input.execution.id,
-              eventId: input.execution.eventId,
-              stepId: action.id,
-              message: action.message,
-            },
-            "Workflow log action",
-          );
-
-          await recordStepOutcome(pool, {
-            executionId: input.execution.id,
-            stepId: action.id,
-            status: "COMPLETED",
-            result: {
-              logged: true,
-            },
-          });
-
-          continue;
-        }
-
-        if (action.type === "notification") {
-          await input.actionAdapters.notification.deliver({
-            executionId: input.execution.id,
-            stepId: action.id,
-            recipient: action.recipient,
-            message: action.message,
-          });
-
-          await recordStepOutcome(pool, {
-            executionId: input.execution.id,
-            stepId: action.id,
-            status: "COMPLETED",
-            result: {
-              delivered: true,
-            },
-          });
-
-          continue;
-        }
-
-        const outcome = await input.actionAdapters.httpRequest.execute({
+        actionResult = await executeAction(action, {
           executionId: input.execution.id,
-          stepId: action.id,
-          action,
-        });
-
-        await recordStepOutcome(pool, {
-          executionId: input.execution.id,
-          stepId: action.id,
-          status: "COMPLETED",
-          result: {
-            statusCode: outcome.statusCode,
-          },
+          eventId: input.execution.eventId,
+          actionAdapters: input.actionAdapters,
         });
       } catch (error: unknown) {
-        const permanentError = getPermanentActionError(error);
+        const failure = toSafeActionFailure(error);
 
-        if (permanentError === undefined) {
+        await finishFailedActionAttempt(
+          pool,
+          attempt.id,
+          failure,
+        );
+
+        if (failure.retryable) {
           throw error;
         }
 
@@ -396,9 +481,21 @@ export async function runWorkflowForExecution(
           input.execution.id,
           action,
           input.definition.actions.slice(index + 1),
-          permanentError,
+          failure,
         );
       }
+
+      const completedStep = await finishSuccessfulActionAttempt(
+        pool,
+        {
+          attemptId: attempt.id,
+          executionId: input.execution.id,
+          stepId: action.id,
+          result: actionResult,
+        },
+      );
+
+      stepsById.set(action.id, completedStep);
     }
   }
 
