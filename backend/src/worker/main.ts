@@ -43,15 +43,15 @@ async function main(): Promise<void> {
 
       currentDispatchPromise = (async () => {
         try {
-          const publishedCount = await dispatchPendingOutboxEvents(
+          const dispatchedCount = await dispatchPendingOutboxEvents(
             pool,
             eventQueue.queue,
           );
 
-          if (publishedCount > 0) {
+          if (dispatchedCount > 0) {
             console.info(
-              { publishedCount },
-              "Published outbox events",
+              { dispatchedCount },
+              "Submitted durable event jobs to BullMQ",
             );
           }
         } catch (error: unknown) {
