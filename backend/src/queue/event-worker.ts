@@ -1,6 +1,8 @@
 import { UnrecoverableError, Worker } from "bullmq";
 import type { Pool } from "pg";
 import type { AppConfig } from "../config.js";
+import { finalizeExhaustedExecution } from "../executions/finalize-exhausted-execution-service.js";
+import { getOrCreateExecutionForEvent } from "../executions/execution-service.js";
 import type { WorkflowActionAdapters } from "../executions/run-workflow-service.js";
 import { HttpActionError } from "../workflows/actions/http-request-adapter.js";
 import {
@@ -57,6 +59,14 @@ function isRetryableError(error: unknown): boolean {
     return error.retryable;
   }
 
+  if (
+    error instanceof Error &&
+    "retryable" in error &&
+    error.retryable === true
+  ) {
+    return true;
+  }
+
   const errorCode = getErrorCode(error);
 
   if (errorCode === undefined) {
@@ -67,6 +77,21 @@ function isRetryableError(error: unknown): boolean {
     errorCode.startsWith("08") ||
     RETRYABLE_POSTGRES_ERROR_CODES.has(errorCode) ||
     RETRYABLE_NETWORK_ERROR_CODES.has(errorCode)
+  );
+}
+
+function hasExhaustedRetries(job: {
+  attemptsMade: number;
+  opts: {
+    attempts?: number;
+  };
+}): boolean {
+  const maximumAttempts = job.opts.attempts;
+
+  return (
+    typeof maximumAttempts === "number" &&
+    maximumAttempts > 0 &&
+    job.attemptsMade + 1 >= maximumAttempts
   );
 }
 
@@ -113,6 +138,64 @@ export function createEventWorker(
 
           if (!isRetryableError(error)) {
             throw toUnrecoverableError(error);
+          }
+
+          if (hasExhaustedRetries(job)) {
+            try {
+              const executionResult =
+                await getOrCreateExecutionForEvent(
+                  pool,
+                  job.data.eventId,
+                );
+
+              if (executionResult.status === "ready") {
+                const finalization =
+                  await finalizeExhaustedExecution(pool, {
+                    executionId:
+                      executionResult.execution.id,
+                  });
+
+                if (finalization.status === "finalized") {
+                  console.error(
+                    {
+                      eventId: job.data.eventId,
+                      executionId: finalization.executionId,
+                      stepId: finalization.stepId,
+                      errorCode: finalization.errorCode,
+                      outcomeUnknown:
+                        finalization.outcomeUnknown,
+                    },
+                    "Execution failed after queue retries were exhausted",
+                  );
+
+                  return;
+                }
+
+                if (finalization.status === "not_active") {
+                  console.info(
+                    {
+                      eventId: job.data.eventId,
+                      executionId:
+                        executionResult.execution.id,
+                    },
+                    "Execution was already terminal when queue retries ended",
+                  );
+
+                  return;
+                }
+              }
+            } catch (finalizationError: unknown) {
+              console.error(
+                {
+                  eventId: job.data.eventId,
+                  errorName:
+                    finalizationError instanceof Error
+                      ? finalizationError.name
+                      : "UnknownError",
+                },
+                "Could not finalize execution after queue retries were exhausted",
+              );
+            }
           }
 
           if (error instanceof Error) {

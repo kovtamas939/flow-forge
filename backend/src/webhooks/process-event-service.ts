@@ -1,6 +1,7 @@
 import type { Pool } from "pg";
 import { runWorkflowForExecution } from "../executions/run-workflow-service.js";
 import { getOrCreateExecutionForEvent } from "../executions/execution-service.js";
+import { recoverUnknownActionOutcome } from "../executions/recover-unknown-action-outcome-service.js";
 import {
   createHttpRequestAdapter,
 } from "../workflows/actions/http-request-adapter.js";
@@ -91,6 +92,36 @@ export async function processEvent(
       }
 
       break;
+  }
+
+  const recoveryResult = await recoverUnknownActionOutcome(pool, {
+    executionId: executionResult.execution.id,
+    actions: result.definition.actions,
+  });
+
+  if (!recoveryResult.recovered) {
+    if (recoveryResult.reason === "claim_unavailable") {
+      console.info(
+        {
+          eventId: result.eventId,
+          executionId: executionResult.execution.id,
+        },
+        "Execution is already being processed by another worker",
+      );
+      return;
+    }
+  } else {
+    console.error(
+      {
+        eventId: result.eventId,
+        executionId: executionResult.execution.id,
+        stepId: recoveryResult.stepId,
+        errorCode: recoveryResult.errorCode,
+        errorMessage: recoveryResult.errorMessage,
+      },
+      "Workflow execution stopped because an action outcome is unknown",
+    );
+    return;
   }
 
   const runResult = await runWorkflowForExecution(pool, {

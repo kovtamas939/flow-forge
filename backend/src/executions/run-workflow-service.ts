@@ -8,8 +8,12 @@ import {
   type ExecutionStepDefinition,
   type ExecutionStepRecord,
 } from "./execution-step-repository.js";
+import { withExecutionClaim } from "./execution-claim.js";
 import { transitionExecution } from "./execution-service.js";
-import type { ExecutionRecord } from "./execution-repository.js";
+import {
+  updateExecutionStatus,
+  type ExecutionRecord,
+} from "./execution-repository.js";
 import {
   HttpActionError,
   type HttpRequestAdapter,
@@ -161,17 +165,36 @@ async function finishSuccessfulActionAttempt(
 
 async function finishFailedActionAttempt(
   pool: Pool,
-  attemptId: string,
-  failure: SafeActionFailure,
+  input: {
+    attemptId: string;
+    executionId: string;
+    failure: SafeActionFailure;
+  },
 ): Promise<void> {
   await withTransaction(pool, async (client) => {
     await finishExecutionStepAttempt(client, {
-      attemptId,
+      attemptId: input.attemptId,
       status: "FAILED",
-      retryable: failure.retryable,
-      errorCode: failure.code,
-      failureSummary: failure.summary,
+      retryable: input.failure.retryable,
+      errorCode: input.failure.code,
+      failureSummary: input.failure.summary,
     });
+
+    if (input.failure.retryable) {
+      const execution = await updateExecutionStatus(client, {
+        executionId: input.executionId,
+        expectedStatus: "RUNNING",
+        nextStatus: "RETRY_PENDING",
+        errorCode: input.failure.code,
+        errorMessage: input.failure.summary,
+      });
+
+      if (execution === null) {
+        throw new Error(
+          `Execution ${input.executionId} could not be marked RETRY_PENDING`,
+        );
+      }
+    }
   });
 }
 
@@ -327,7 +350,7 @@ async function failAction(
   };
 }
 
-export async function runWorkflowForExecution(
+async function runWorkflowClaimed(
   pool: Pool,
   input: {
     execution: ExecutionRecord;
@@ -466,11 +489,11 @@ export async function runWorkflowForExecution(
       } catch (error: unknown) {
         const failure = toSafeActionFailure(error);
 
-        await finishFailedActionAttempt(
-          pool,
-          attempt.id,
+        await finishFailedActionAttempt(pool, {
+          attemptId: attempt.id,
+          executionId: input.execution.id,
           failure,
-        );
+        });
 
         if (failure.retryable) {
           throw error;
@@ -514,4 +537,20 @@ export async function runWorkflowForExecution(
   return {
     status: "completed",
   };
+}
+
+export async function runWorkflowForExecution(
+  pool: Pool,
+  input: {
+    execution: ExecutionRecord;
+    definition: WorkflowDefinitionV1;
+    payload: unknown;
+    actionAdapters: WorkflowActionAdapters;
+  },
+): Promise<RunWorkflowResult> {
+  return withExecutionClaim(
+    pool,
+    input.execution.id,
+    () => runWorkflowClaimed(pool, input),
+  );
 }

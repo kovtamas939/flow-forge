@@ -13,7 +13,7 @@ const LEGAL_EXECUTION_TRANSITIONS: Partial<
 > = {
   PENDING: ["RUNNING"],
   RUNNING: ["RETRY_PENDING", "COMPLETED", "FAILED"],
-  RETRY_PENDING: ["RUNNING"],
+  RETRY_PENDING: ["RUNNING", "FAILED"],
 };
 
 export function isLegalExecutionTransition(
