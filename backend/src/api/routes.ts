@@ -24,7 +24,9 @@ export async function registerRoutes(
   app: FastifyInstance,
   options: RegisterRoutesOptions,
 ): Promise<void> {
-  await app.register(healthRoutes);
+  await app.register(healthRoutes, {
+  pool: options.pool,
+});
   await app.register(authRoutes, {
     pool: options.pool,
     secureCookies: options.secureCookies,

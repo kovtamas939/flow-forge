@@ -8,6 +8,7 @@ import { createHttpRequestAdapter } from "../workflows/actions/http-request-adap
 import { createUnconfiguredNotificationAdapter } from "../workflows/actions/notification-adapter.js";
 
 const DISPATCH_INTERVAL_MILLISECONDS = 1_000;
+const OPERATIONAL_METRICS_INTERVAL_MILLISECONDS = 30_000;
 const WORKER_SHUTDOWN_GRACE_PERIOD_MILLISECONDS = 30_000;
 
 const logger = createStructuredLogger("worker");
@@ -76,11 +77,56 @@ async function main(): Promise<void> {
       })();
     };
 
+    let metricsInProgress = false;
+    let currentMetricsPromise: Promise<void> = Promise.resolve();
+
+    const collectOperationalMetrics = (): void => {
+      if (shuttingDown || metricsInProgress) {
+        return;
+      }
+
+      metricsInProgress = true;
+
+      currentMetricsPromise = (async () => {
+        try {
+          const jobCounts = await eventQueue.queue.getJobCounts(
+            "waiting",
+            "active",
+            "delayed",
+            "failed",
+            "completed",
+          );
+
+          logger.info(
+            {
+              queueName: eventQueue.queue.name,
+              jobCounts,
+            },
+            "Worker queue metrics",
+          );
+        } catch (error: unknown) {
+          logger.warn(
+            { errorName: getErrorName(error) },
+            "Could not collect worker queue metrics",
+          );
+        } finally {
+          metricsInProgress = false;
+        }
+      })();
+    };
+
     runDispatchCycle();
 
     const dispatchTimer = setInterval(
       runDispatchCycle,
       DISPATCH_INTERVAL_MILLISECONDS,
+    );
+
+    collectOperationalMetrics();
+
+    const metricsTimer = setInterval(
+      collectOperationalMetrics,
+      OPERATIONAL_METRICS_INTERVAL_MILLISECONDS,
     );
 
     let shutdownPromise: Promise<void> | undefined;
@@ -92,11 +138,13 @@ async function main(): Promise<void> {
 
       shuttingDown = true;
       clearInterval(dispatchTimer);
+      clearInterval(metricsTimer);
 
       shutdownPromise = (async () => {
         logger.info({ signal }, "Shutting down worker process");
 
         await currentDispatchPromise;
+        await currentMetricsPromise;
 
         try {
           const drained = await eventWorker.closeGracefully(
