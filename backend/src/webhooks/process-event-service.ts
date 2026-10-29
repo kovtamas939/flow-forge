@@ -11,6 +11,7 @@ import {
 import type {
   WorkflowActionAdapters,
 } from "../executions/run-workflow-service.js";
+import type { StructuredLogger } from "../observability/structured-logger.js";
 import { loadPinnedEventWorkflowDefinition } from "../workflows/load-pinned-event-workflow-definition-service.js";
 
 export class EventNotFoundError extends Error {
@@ -35,6 +36,7 @@ const DEFAULT_ACTION_ADAPTERS: WorkflowActionAdapters = {
 export async function processEvent(
   pool: Pool,
   eventId: string,
+  logger: StructuredLogger,
   actionAdapters: WorkflowActionAdapters = DEFAULT_ACTION_ADAPTERS,
 ): Promise<void> {
   const result = await loadPinnedEventWorkflowDefinition(pool, eventId);
@@ -101,7 +103,7 @@ export async function processEvent(
 
   if (!recoveryResult.recovered) {
     if (recoveryResult.reason === "claim_unavailable") {
-      console.info(
+      logger.info(
         {
           eventId: result.eventId,
           executionId: executionResult.execution.id,
@@ -111,13 +113,12 @@ export async function processEvent(
       return;
     }
   } else {
-    console.error(
+    logger.error(
       {
         eventId: result.eventId,
         executionId: executionResult.execution.id,
         stepId: recoveryResult.stepId,
         errorCode: recoveryResult.errorCode,
-        errorMessage: recoveryResult.errorMessage,
       },
       "Workflow execution stopped because an action outcome is unknown",
     );
@@ -129,11 +130,12 @@ export async function processEvent(
     definition: result.definition,
     payload: result.payload,
     actionAdapters,
+    logger,
   });
 
   switch (runResult.status) {
     case "completed":
-      console.info(
+      logger.info(
         {
           eventId: result.eventId,
           executionId: executionResult.execution.id,
@@ -143,19 +145,18 @@ export async function processEvent(
       return;
 
     case "failed":
-      console.error(
+      logger.error(
         {
           eventId: result.eventId,
           executionId: executionResult.execution.id,
           errorCode: runResult.errorCode,
-          errorMessage: runResult.errorMessage,
         },
         "Workflow execution failed",
       );
       return;
 
     case "already_terminal":
-      console.info(
+      logger.info(
         {
           eventId: result.eventId,
           executionId: executionResult.execution.id,
@@ -166,7 +167,7 @@ export async function processEvent(
       return;
 
     case "state_changed":
-      console.info(
+      logger.info(
         {
           eventId: result.eventId,
           executionId: executionResult.execution.id,

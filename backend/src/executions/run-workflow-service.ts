@@ -1,5 +1,6 @@
 import type { Pool } from "pg";
 import { withTransaction } from "../db/transaction.js";
+import type { StructuredLogger } from "../observability/structured-logger.js";
 import {
   beginExecutionStepAttempt,
   ensureExecutionSteps,
@@ -234,17 +235,18 @@ async function executeAction(
     executionId: string;
     eventId: string;
     actionAdapters: WorkflowActionAdapters;
+    logger: StructuredLogger;
   },
 ): Promise<Record<string, unknown>> {
   if (action.type === "log") {
-    console.info(
+    input.logger.info(
       {
         executionId: input.executionId,
         eventId: input.eventId,
         stepId: action.id,
-        message: action.message,
+        actionType: action.type,
       },
-      "Workflow log action",
+      action.message,
     );
 
     return {
@@ -357,6 +359,7 @@ async function runWorkflowClaimed(
     definition: WorkflowDefinitionV1;
     payload: unknown;
     actionAdapters: WorkflowActionAdapters;
+    logger: StructuredLogger;
   },
 ): Promise<RunWorkflowResult> {
   const startResult = await startExecution(pool, input.execution);
@@ -485,6 +488,7 @@ async function runWorkflowClaimed(
           executionId: input.execution.id,
           eventId: input.execution.eventId,
           actionAdapters: input.actionAdapters,
+          logger: input.logger,
         });
       } catch (error: unknown) {
         const failure = toSafeActionFailure(error);
@@ -546,6 +550,7 @@ export async function runWorkflowForExecution(
     definition: WorkflowDefinitionV1;
     payload: unknown;
     actionAdapters: WorkflowActionAdapters;
+    logger: StructuredLogger;
   },
 ): Promise<RunWorkflowResult> {
   return withExecutionClaim(

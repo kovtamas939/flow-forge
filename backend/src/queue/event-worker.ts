@@ -4,6 +4,7 @@ import type { AppConfig } from "../config.js";
 import { finalizeExhaustedExecution } from "../executions/finalize-exhausted-execution-service.js";
 import { getOrCreateExecutionForEvent } from "../executions/execution-service.js";
 import type { WorkflowActionAdapters } from "../executions/run-workflow-service.js";
+import type { StructuredLogger } from "../observability/structured-logger.js";
 import { HttpActionError } from "../workflows/actions/http-request-adapter.js";
 import {
   EventNotFoundError,
@@ -52,6 +53,10 @@ function getErrorCode(error: unknown): string | undefined {
   return typeof codedError.code === "string"
     ? codedError.code
     : undefined;
+}
+
+function getErrorName(error: unknown): string {
+  return error instanceof Error ? error.name : "UnknownError";
 }
 
 function isRetryableError(error: unknown): boolean {
@@ -109,6 +114,7 @@ export function createEventWorker(
   config: AppConfig,
   pool: Pool,
   actionAdapters: WorkflowActionAdapters,
+  logger: StructuredLogger,
 ): EventWorkerHandle {
   let activeJobCount = 0;
   let notifyWhenIdle: (() => void) | undefined;
@@ -129,6 +135,7 @@ export function createEventWorker(
           await processEvent(
             pool,
             job.data.eventId,
+            logger,
             actionAdapters,
           );
         } catch (error: unknown) {
@@ -156,7 +163,7 @@ export function createEventWorker(
                   });
 
                 if (finalization.status === "finalized") {
-                  console.error(
+                  logger.error(
                     {
                       eventId: job.data.eventId,
                       executionId: finalization.executionId,
@@ -172,7 +179,7 @@ export function createEventWorker(
                 }
 
                 if (finalization.status === "not_active") {
-                  console.info(
+                  logger.info(
                     {
                       eventId: job.data.eventId,
                       executionId:
@@ -185,13 +192,11 @@ export function createEventWorker(
                 }
               }
             } catch (finalizationError: unknown) {
-              console.error(
+              logger.error(
                 {
                   eventId: job.data.eventId,
-                  errorName:
-                    finalizationError instanceof Error
-                      ? finalizationError.name
-                      : "UnknownError",
+                  errorName: getErrorName(finalizationError),
+                  errorCode: getErrorCode(finalizationError),
                 },
                 "Could not finalize execution after queue retries were exhausted",
               );
@@ -223,16 +228,22 @@ export function createEventWorker(
   );
 
   worker.on("error", (error: Error) => {
-    console.error("Event worker error", error);
+    logger.error(
+      {
+        errorName: error.name,
+        errorCode: getErrorCode(error),
+      },
+      "Event worker error",
+    );
   });
 
   worker.on("failed", (job, error: Error) => {
-    console.error(
+    logger.error(
       {
         jobId: job?.id,
         eventId: job?.data.eventId,
         errorName: error.name,
-        errorMessage: error.message,
+        errorCode: getErrorCode(error),
       },
       "Event job failed",
     );

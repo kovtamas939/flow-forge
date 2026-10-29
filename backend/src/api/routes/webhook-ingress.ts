@@ -147,6 +147,15 @@ export async function webhookIngressRoutes(
         );
       }
 
+      request.log.info(
+        {
+          requestId: request.id,
+          webhookId: params.webhookId,
+          eventId: result.event.id,
+        },
+        "Webhook event accepted",
+      );
+
       return reply.code(202).send({
         event: {
           id: result.event.id,

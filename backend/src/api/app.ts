@@ -60,6 +60,20 @@ export async function buildApp(
   const app = Fastify({
     logger: {
       level: "info",
+      redact: {
+        paths: [
+          "req.body",
+          "req.headers.authorization",
+          "req.headers.cookie",
+          "req.headers['proxy-authorization']",
+          "req.headers['set-cookie']",
+          "req.headers['x-api-key']",
+          "req.headers['x-csrf-token']",
+          "req.headers['x-flowforge-signature']",
+          "res.headers['set-cookie']",
+        ],
+        censor: "[REDACTED]",
+      },
     },
     requestIdHeader: REQUEST_ID_HEADER,
     genReqId: generateRequestId,

@@ -3,11 +3,18 @@ import { closePool, createPool, pingPool } from "../db/pool.js";
 import { dispatchPendingOutboxEvents } from "../outbox/dispatch-pending-outbox-service.js";
 import { createEventQueue } from "../queue/event-queue.js";
 import { createEventWorker } from "../queue/event-worker.js";
+import { createStructuredLogger } from "../observability/structured-logger.js";
 import { createHttpRequestAdapter } from "../workflows/actions/http-request-adapter.js";
 import { createUnconfiguredNotificationAdapter } from "../workflows/actions/notification-adapter.js";
 
 const DISPATCH_INTERVAL_MILLISECONDS = 1_000;
 const WORKER_SHUTDOWN_GRACE_PERIOD_MILLISECONDS = 30_000;
+
+const logger = createStructuredLogger("worker");
+
+function getErrorName(error: unknown): string {
+  return error instanceof Error ? error.name : "UnknownError";
+}
 
 async function main(): Promise<void> {
   const config = loadConfig();
@@ -21,6 +28,7 @@ async function main(): Promise<void> {
     config,
     pool,
     actionAdapters,
+    logger,
   );
 
   try {
@@ -28,7 +36,10 @@ async function main(): Promise<void> {
     await eventQueue.queue.waitUntilReady();
     await eventWorker.worker.waitUntilReady();
 
-    console.info("Outbox dispatcher and event consumer connected");
+    logger.info(
+      {},
+      "Outbox dispatcher and event consumer connected",
+    );
 
     let shuttingDown = false;
     let dispatchInProgress = false;
@@ -49,13 +60,16 @@ async function main(): Promise<void> {
           );
 
           if (dispatchedCount > 0) {
-            console.info(
+            logger.info(
               { dispatchedCount },
               "Submitted durable event jobs to BullMQ",
             );
           }
         } catch (error: unknown) {
-          console.error("Outbox dispatch cycle failed", error);
+          logger.error(
+            { errorName: getErrorName(error) },
+            "Outbox dispatch cycle failed",
+          );
         } finally {
           dispatchInProgress = false;
         }
@@ -80,7 +94,7 @@ async function main(): Promise<void> {
       clearInterval(dispatchTimer);
 
       shutdownPromise = (async () => {
-        console.info({ signal }, "shutting down worker process");
+        logger.info({ signal }, "Shutting down worker process");
 
         await currentDispatchPromise;
 
@@ -90,27 +104,37 @@ async function main(): Promise<void> {
           );
 
           if (!drained) {
-            console.error(
+            logger.error(
+              {},
               "Worker shutdown grace period expired; active jobs may be retried",
             );
             process.exitCode = 1;
           }
         } catch (error: unknown) {
-          console.error("Failed to close event worker", error);
+          logger.error(
+            { errorName: getErrorName(error) },
+            "Failed to close event worker",
+          );
           process.exitCode = 1;
         }
 
         try {
           await eventQueue.close();
         } catch (error: unknown) {
-          console.error("Failed to close event queue", error);
+          logger.error(
+            { errorName: getErrorName(error) },
+            "Failed to close event queue",
+          );
           process.exitCode = 1;
         }
 
         try {
           await closePool(pool);
         } catch (error: unknown) {
-          console.error("Failed to close database pool", error);
+          logger.error(
+            { errorName: getErrorName(error) },
+            "Failed to close database pool",
+          );
           process.exitCode = 1;
         }
       })();
@@ -129,27 +153,27 @@ async function main(): Promise<void> {
     try {
       await eventWorker.closeGracefully(0);
     } catch (cleanupError: unknown) {
-      console.error(
+      logger.error(
+        { errorName: getErrorName(cleanupError) },
         "Failed to close event worker after startup error",
-        cleanupError,
       );
     }
 
     try {
       await eventQueue.close();
     } catch (cleanupError: unknown) {
-      console.error(
+      logger.error(
+        { errorName: getErrorName(cleanupError) },
         "Failed to close event queue after startup error",
-        cleanupError,
       );
     }
 
     try {
       await closePool(pool);
     } catch (cleanupError: unknown) {
-      console.error(
+      logger.error(
+        { errorName: getErrorName(cleanupError) },
         "Failed to close database pool after startup error",
-        cleanupError,
       );
     }
 
@@ -158,6 +182,9 @@ async function main(): Promise<void> {
 }
 
 void main().catch((error: unknown) => {
-  console.error("Worker startup failed", error);
+  logger.error(
+    { errorName: getErrorName(error) },
+    "Worker startup failed",
+  );
   process.exitCode = 1;
 });
