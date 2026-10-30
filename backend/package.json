@@ -12,6 +12,7 @@
     "typecheck": "tsc --noEmit",
     "test:typecheck": "tsc --noEmit -p tsconfig.test.json",
     "test": "vitest run",
+    "test:integration": "node --env-file=.env.test ./node_modules/vitest/vitest.mjs run --config vitest.integration.config.ts",
     "build": "tsc",
     "check-config": "npm run build && node --env-file=.env dist/check-config.js",
     "check-db": "npm run build && node --env-file=.env dist/check-db.js",
