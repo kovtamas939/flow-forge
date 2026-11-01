@@ -59,7 +59,7 @@ function getErrorName(error: unknown): string {
   return error instanceof Error ? error.name : "UnknownError";
 }
 
-function isRetryableError(error: unknown): boolean {
+export function isRetryableError(error: unknown): boolean {
   if (error instanceof HttpActionError) {
     return error.retryable;
   }
@@ -85,7 +85,7 @@ function isRetryableError(error: unknown): boolean {
   );
 }
 
-function hasExhaustedRetries(job: {
+export function hasExhaustedRetries(job: {
   attemptsMade: number;
   opts: {
     attempts?: number;
