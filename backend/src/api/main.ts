@@ -10,10 +10,16 @@ try {
     await pingPool(pool);
 
     const secureCookies = config.nodeEnv === "production";
+    const localHosts = new Set(["127.0.0.1", "localhost", "::1"]);
+    const exposeApiDocumentation =
+      config.nodeEnv === "development" &&
+      localHosts.has(config.host.toLowerCase());
+
     const app = await buildApp(
       pool,
       secureCookies,
       config.webhookEncryptionKey,
+      exposeApiDocumentation,
     );
     let shutdownPromise: Promise<void> | undefined;
 

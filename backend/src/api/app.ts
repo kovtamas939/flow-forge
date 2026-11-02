@@ -1,4 +1,6 @@
 import fastifyCookie from "@fastify/cookie";
+import fastifySwagger from "@fastify/swagger";
+import fastifySwaggerUi from "@fastify/swagger-ui";
 import Fastify from "fastify";
 import type { FastifyInstance } from "fastify";
 import type { Pool } from "pg";
@@ -9,6 +11,7 @@ import {
   REQUEST_ID_HEADER,
 } from "./request-id.js";
 import { registerCsrfProtection } from "./csrf-protection.js";
+import { registerOpenApiRouteMetadata } from "./openapi-route-metadata.js";
 import { registerRoutes } from "./routes.js";
 
 type ErrorDetails = {
@@ -56,6 +59,7 @@ export async function buildApp(
   pool: Pool,
   secureCookies: boolean,
   webhookEncryptionKey: Buffer,
+  exposeApiDocumentation = false,
 ): Promise<FastifyInstance> {
   const app = Fastify({
     logger: {
@@ -68,7 +72,7 @@ export async function buildApp(
           "req.headers['proxy-authorization']",
           "req.headers['set-cookie']",
           "req.headers['x-api-key']",
-          "req.headers['x-csrf-token']",
+          "req.headers['x-flowforge-csrf']",
           "req.headers['x-flowforge-signature']",
           "res.headers['set-cookie']",
         ],
@@ -134,16 +138,75 @@ export async function buildApp(
   });
 
   await app.register(fastifyCookie);
+
+  await app.register(fastifySwagger, {
+    openapi: {
+      openapi: "3.1.0",
+      info: {
+        title: "FlowForge API",
+        description:
+          "REST API for the FlowForge workflow automation platform.",
+        version: "0.0.1",
+      },
+      components: {
+        securitySchemes: {
+          sessionCookie: {
+            type: "apiKey",
+            in: "cookie",
+            name: "flowforge_session",
+            description:
+              "Session cookie set by the login endpoint. The cookie is HttpOnly.",
+          },
+          csrfToken: {
+            type: "apiKey",
+            in: "header",
+            name: "x-flowforge-csrf",
+            description:
+              "CSRF token returned by GET /api/v1/auth/csrf. Required for authenticated state-changing requests.",
+          },
+          webhookSignature: {
+            type: "apiKey",
+            in: "header",
+            name: "x-flowforge-signature",
+            description:
+              "HMAC signature of the exact raw request body. The timestamp and event ID headers are also required.",
+          },
+        },
+      },
+    },
+  });
+
   app.decorateRequest("currentUser", null);
 
   registerRequestIdHook(app);
   registerCsrfProtection(app);
+  registerOpenApiRouteMetadata(app);
 
   await app.register(registerRoutes, {
     pool,
     secureCookies,
     webhookEncryptionKey,
   });
+
+  if (exposeApiDocumentation) {
+    await app.register(fastifySwaggerUi, {
+      routePrefix: "/documentation",
+      uiConfig: {
+        docExpansion: "list",
+        deepLinking: true,
+      },
+    });
+
+    app.get(
+      "/openapi.json",
+      {
+        schema: {
+          hide: true,
+        },
+      },
+      async () => app.swagger(),
+    );
+  }
 
   return app;
 }
