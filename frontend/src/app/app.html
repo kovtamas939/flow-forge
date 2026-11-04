@@ -5,25 +5,78 @@
       <span>FlowForge</span>
     </header>
 
-    @if (authState.state(); as state) {
-      @if (state.status === 'loading') {
+    @if (authState.state(); as auth) {
+      @if (auth.status === 'loading') {
         <div class="state-message" role="status">
           <h1 id="page-title">Checking your session</h1>
           <p>Checking whether you are signed in.</p>
         </div>
-      } @else if (state.status === 'error') {
+      } @else if (auth.status === 'error') {
         <div class="state-message" role="alert">
           <h1 id="page-title">Service unavailable</h1>
           <p>
             We couldn't check your session. Refresh the page or try again later.
           </p>
         </div>
-      } @else if (state.status === 'authenticated') {
-        <div class="state-message" role="status">
-          <h1 id="page-title">Welcome!</h1>
-          <p>You are signed in with this email address:</p>
-          <p class="user-email">{{ state.user.email }}</p>
-        </div>
+      } @else if (auth.status === 'authenticated') {
+        @if (workspaceState.state(); as workspaceStateValue) {
+          @if (workspaceStateValue.status === 'loading' ||
+          workspaceStateValue.status === 'idle') {
+            <div class="state-message" role="status">
+              <h1 id="page-title">Loading your workspaces</h1>
+              <p>Getting the workspaces you belong to.</p>
+            </div>
+          } @else if (workspaceStateValue.status === 'error') {
+            <div class="state-message" role="alert">
+              <h1 id="page-title">Couldn't load your workspaces</h1>
+              <p>Please check your connection and try again.</p>
+              <button type="button" (click)="retryWorkspaceLoad()">
+                Try again
+              </button>
+            </div>
+          } @else if (workspaceStateValue.workspaces.length === 0) {
+            <div class="state-message">
+              <h1 id="page-title">No workspaces yet</h1>
+              <p>You don't belong to any workspaces yet.</p>
+            </div>
+          } @else {
+            <div class="workspace-heading">
+              <h1 id="page-title">Choose a workspace</h1>
+              <p>
+                Signed in as
+                <span class="user-email">{{ auth.user.email }}</span>
+              </p>
+            </div>
+
+            <div class="workspace-list" aria-label="Your workspaces">
+              @for (workspace of workspaceStateValue.workspaces; track
+              workspace.id) {
+                <button
+                  type="button"
+                  class="workspace-option"
+                  [class.selected]="
+                    workspaceStateValue.selectedWorkspaceId === workspace.id
+                  "
+                  [attr.aria-pressed]="
+                    workspaceStateValue.selectedWorkspaceId === workspace.id
+                  "
+                  (click)="selectWorkspace(workspace.id)"
+                >
+                  <span class="workspace-name">{{ workspace.name }}</span>
+                  <span class="workspace-role">{{ workspace.role }}</span>
+                </button>
+              }
+            </div>
+
+            @if (workspaceStateValue.selectedWorkspaceId) {
+              <p class="selection-message" role="status">
+                Workspace selected.
+              </p>
+            } @else {
+              <p class="selection-hint">Select a workspace to continue.</p>
+            }
+          }
+        }
       } @else {
         <div class="form-heading">
           <h1 id="page-title">Sign in</h1>

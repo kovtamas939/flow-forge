@@ -1,9 +1,10 @@
 import { HttpErrorResponse } from '@angular/common/http';
-import { Component, inject, signal } from '@angular/core';
+import { Component, effect, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { RouterOutlet } from '@angular/router';
 import { AuthApiService } from './auth/auth-api.service';
 import { AuthStateService } from './auth/auth-state.service';
+import { WorkspaceStateService } from './workspaces/workspace-state.service';
 
 @Component({
   imports: [FormsModule, RouterOutlet],
@@ -13,6 +14,7 @@ import { AuthStateService } from './auth/auth-state.service';
 })
 export class App {
   protected readonly authState = inject(AuthStateService);
+  protected readonly workspaceState = inject(WorkspaceStateService);
 
   protected readonly email = signal('');
   protected readonly password = signal('');
@@ -22,6 +24,16 @@ export class App {
   private readonly authApi = inject(AuthApiService);
 
   constructor() {
+    effect(() => {
+      const state = this.authState.state();
+
+      if (state.status === 'authenticated') {
+        this.workspaceState.loadMyWorkspaces();
+      } else if (state.status === 'unauthenticated') {
+        this.workspaceState.reset();
+      }
+    });
+
     this.authState.restoreSession();
   }
 
@@ -53,10 +65,16 @@ export class App {
             return;
           }
 
-          this.loginError.set(
-            'Sign-in failed. Please try again later.',
-          );
+          this.loginError.set('Sign-in failed. Please try again later.');
         },
       });
+  }
+
+  protected selectWorkspace(workspaceId: string): void {
+    this.workspaceState.selectWorkspace(workspaceId);
+  }
+
+  protected retryWorkspaceLoad(): void {
+    this.workspaceState.loadMyWorkspaces();
   }
 }
