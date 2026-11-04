@@ -1,9 +1,10 @@
 import { HttpErrorResponse } from '@angular/common/http';
-import { Component, effect, inject, signal } from '@angular/core';
+import { Component, computed, effect, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { RouterOutlet } from '@angular/router';
 import { AuthApiService } from './auth/auth-api.service';
 import { AuthStateService } from './auth/auth-state.service';
+import { getWorkspaceNavigationItems } from './workspaces/workspace-navigation';
 import { WorkspaceStateService } from './workspaces/workspace-state.service';
 
 @Component({
@@ -20,6 +21,31 @@ export class App {
   protected readonly password = signal('');
   protected readonly isSubmitting = signal(false);
   protected readonly loginError = signal('');
+
+  protected readonly selectedWorkspace = computed(() => {
+    const state = this.workspaceState.state();
+
+    if (
+      state.status !== 'loaded' ||
+      state.selectedWorkspaceId === null
+    ) {
+      return null;
+    }
+
+    return (
+      state.workspaces.find(
+        (workspace) => workspace.id === state.selectedWorkspaceId,
+      ) ?? null
+    );
+  });
+
+  protected readonly navigationItems = computed(() => {
+    const workspace = this.selectedWorkspace();
+
+    return workspace
+      ? getWorkspaceNavigationItems(workspace.role)
+      : [];
+  });
 
   private readonly authApi = inject(AuthApiService);
 

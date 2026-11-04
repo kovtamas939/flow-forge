@@ -68,10 +68,26 @@
               }
             </div>
 
-            @if (workspaceStateValue.selectedWorkspaceId) {
-              <p class="selection-message" role="status">
-                Workspace selected.
-              </p>
+            @if (selectedWorkspace(); as selected) {
+              <section class="workspace-navigation">
+                <h2>{{ selected.name }}</h2>
+                <p class="role-summary">
+                  Your role: <strong>{{ selected.role }}</strong>
+                </p>
+
+                <nav aria-label="Workspace navigation">
+                  <ul class="navigation-list">
+                    @for (item of navigationItems(); track item.label) {
+                      <li>
+                        <span class="navigation-item" aria-disabled="true">
+                          <span>{{ item.label }}</span>
+                          <span class="coming-soon">Coming soon</span>
+                        </span>
+                      </li>
+                    }
+                  </ul>
+                </nav>
+              </section>
             } @else {
               <p class="selection-hint">Select a workspace to continue.</p>
             }
