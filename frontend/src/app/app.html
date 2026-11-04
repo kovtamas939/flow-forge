@@ -79,10 +79,19 @@
                   <ul class="navigation-list">
                     @for (item of navigationItems(); track item.label) {
                       <li>
-                        <span class="navigation-item" aria-disabled="true">
-                          <span>{{ item.label }}</span>
-                          <span class="coming-soon">Coming soon</span>
-                        </span>
+                        @if (item.path) {
+                          <a
+                            class="navigation-item"
+                            [routerLink]="item.path"
+                          >
+                            {{ item.label }}
+                          </a>
+                        } @else {
+                          <span class="navigation-item" aria-disabled="true">
+                            <span>{{ item.label }}</span>
+                            <span class="coming-soon">Coming soon</span>
+                          </span>
+                        }
                       </li>
                     }
                   </ul>
@@ -134,4 +143,6 @@
       }
     }
   </section>
+
+  <router-outlet />
 </main>

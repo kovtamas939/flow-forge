@@ -1,0 +1,64 @@
+<section class="draft-page" aria-labelledby="draft-page-title">
+  <a
+    class="back-link"
+    [routerLink]="[
+      '/workspaces',
+      workflow()?.workspaceId,
+      'workflows'
+    ]"
+  >
+    Back to workflows
+  </a>
+
+  @if (isLoading()) {
+    <p class="message" role="status">Loading workflow…</p>
+  } @else if (loadError()) {
+    <div class="message error" role="alert">
+      {{ loadError() }}
+    </div>
+  } @else if (workflow(); as currentWorkflow) {
+    <header class="draft-header">
+      <div>
+        <p class="eyebrow">Draft workflow</p>
+        <h1 id="draft-page-title">{{ currentWorkflow.name }}</h1>
+        <p class="workflow-status">Status: {{ currentWorkflow.status }}</p>
+      </div>
+    </header>
+
+    @if (currentWorkflow.status === 'DRAFT') {
+      <p class="editor-help">
+        Edit the workflow definition as JSON. The backend checks whether the
+        definition is valid when you activate the workflow.
+      </p>
+
+      <form (ngSubmit)="saveDraft()">
+        <label for="definition">Workflow definition</label>
+        <textarea
+          id="definition"
+          name="definition"
+          spellcheck="false"
+          autocapitalize="off"
+          autocomplete="off"
+          [(ngModel)]="definitionText"
+        ></textarea>
+
+        @if (saveError()) {
+          <p class="error-text" role="alert">{{ saveError() }}</p>
+        }
+
+        @if (saveSuccess()) {
+          <p class="success-text" role="status">{{ saveSuccess() }}</p>
+        }
+
+        <button type="submit" [disabled]="isSaving()">
+          {{ isSaving() ? 'Saving…' : 'Save draft' }}
+        </button>
+      </form>
+    } @else {
+      <p class="message">
+        This workflow is {{ currentWorkflow.status }}. Only draft workflows can
+        be edited here.
+      </p>
+    }
+  }
+</section>

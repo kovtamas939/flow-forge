@@ -1,14 +1,14 @@
 import { HttpErrorResponse } from '@angular/common/http';
 import { Component, computed, effect, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { RouterOutlet } from '@angular/router';
+import { RouterLink, RouterOutlet } from '@angular/router';
 import { AuthApiService } from './auth/auth-api.service';
 import { AuthStateService } from './auth/auth-state.service';
 import { getWorkspaceNavigationItems } from './workspaces/workspace-navigation';
 import { WorkspaceStateService } from './workspaces/workspace-state.service';
 
 @Component({
-  imports: [FormsModule, RouterOutlet],
+  imports: [FormsModule, RouterLink, RouterOutlet],
   selector: 'app-root',
   styleUrl: './app.css',
   templateUrl: './app.html',
@@ -43,7 +43,7 @@ export class App {
     const workspace = this.selectedWorkspace();
 
     return workspace
-      ? getWorkspaceNavigationItems(workspace.role)
+      ? getWorkspaceNavigationItems(workspace.role, workspace.id)
       : [];
   });
 

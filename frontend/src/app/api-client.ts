@@ -1,7 +1,18 @@
-import { HttpClient } from '@angular/common/http';
+import { HttpClient, HttpHeaders } from '@angular/common/http';
 import { inject, Injectable } from '@angular/core';
-import { Observable } from 'rxjs';
+import { Observable, switchMap } from 'rxjs';
 import { API_BASE_URL } from './api-config';
+
+type CsrfTokenResponseDto = {
+  csrfToken: string;
+};
+
+const CSRF_HEADER_NAME = 'x-flowforge-csrf';
+
+const PUBLIC_STATE_CHANGING_PATHS = new Set([
+  'auth/register',
+  'auth/login',
+]);
 
 @Injectable({
   providedIn: 'root',
@@ -17,18 +28,52 @@ export class ApiClient {
     path: string,
     body: TRequest,
   ): Observable<TResponse> {
-    return this.http.post<TResponse>(this.createUrl(path), body);
+    const normalizedPath = this.normalizePath(path);
+    const url = this.createUrl(normalizedPath);
+
+    return this.withCsrfToken(normalizedPath, (headers) =>
+      this.http.post<TResponse>(url, body, { headers }),
+    );
   }
 
   put<TRequest, TResponse>(
     path: string,
     body: TRequest,
   ): Observable<TResponse> {
-    return this.http.put<TResponse>(this.createUrl(path), body);
+    const normalizedPath = this.normalizePath(path);
+    const url = this.createUrl(normalizedPath);
+
+    return this.withCsrfToken(normalizedPath, (headers) =>
+      this.http.put<TResponse>(url, body, { headers }),
+    );
+  }
+
+  private withCsrfToken<TResponse>(
+    path: string,
+    sendRequest: (headers: HttpHeaders) => Observable<TResponse>,
+  ): Observable<TResponse> {
+    if (PUBLIC_STATE_CHANGING_PATHS.has(path)) {
+      return sendRequest(new HttpHeaders());
+    }
+
+    return this.http
+      .get<CsrfTokenResponseDto>(this.createUrl('auth/csrf'))
+      .pipe(
+        switchMap(({ csrfToken }) =>
+          sendRequest(
+            new HttpHeaders({
+              [CSRF_HEADER_NAME]: csrfToken,
+            }),
+          ),
+        ),
+      );
   }
 
   private createUrl(path: string): string {
-    const normalizedPath = path.replace(/^\/+/, '');
-    return `${API_BASE_URL}/${normalizedPath}`;
+    return `${API_BASE_URL}/${this.normalizePath(path)}`;
+  }
+
+  private normalizePath(path: string): string {
+    return path.replace(/^\/+/, '');
   }
 }

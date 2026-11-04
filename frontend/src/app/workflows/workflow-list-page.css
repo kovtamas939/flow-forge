@@ -1,0 +1,228 @@
+:host {
+  display: block;
+  width: min(100%, 880px);
+}
+
+.workflow-page {
+  padding: 28px;
+  border: 1px solid #e4e9f1;
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 18px 55px rgb(24 39 75 / 9%);
+}
+
+.workflow-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid #e4e9f1;
+}
+
+.eyebrow {
+  margin: 0 0 6px;
+  color: #64748b;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+h1,
+h2,
+p {
+  margin-top: 0;
+}
+
+h1 {
+  margin-bottom: 0;
+  color: #172033;
+  font-size: 1.6rem;
+}
+
+.description {
+  margin: 8px 0 0;
+  color: #64748b;
+  line-height: 1.5;
+}
+
+.create-button,
+.create-form button,
+.message button,
+.load-more,
+.lifecycle-button {
+  padding: 10px 14px;
+  border: 0;
+  border-radius: 8px;
+  background: #2563eb;
+  color: #fff;
+  font: inherit;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.create-button:hover,
+.create-form button:hover:not(:disabled),
+.message button:hover,
+.load-more:hover:not(:disabled),
+.lifecycle-button:hover:not(:disabled) {
+  background: #1d4ed8;
+}
+
+.create-form {
+  display: grid;
+  gap: 10px;
+  margin-top: 20px;
+  padding: 18px;
+  border: 1px solid #e4e9f1;
+  border-radius: 10px;
+  background: #f8faff;
+}
+
+.create-form label {
+  color: #334155;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.create-form input {
+  width: 100%;
+  padding: 11px 12px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  color: #172033;
+  font: inherit;
+  box-sizing: border-box;
+}
+
+.create-form input:focus {
+  border-color: #2563eb;
+  outline: 3px solid rgb(37 99 235 / 15%);
+}
+
+.create-form button {
+  justify-self: start;
+  margin-top: 4px;
+}
+
+.create-form button:disabled,
+.load-more:disabled,
+.lifecycle-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.error-text,
+.action-error {
+  margin: 0;
+  color: #b42318;
+}
+
+.action-error {
+  margin-top: 18px;
+}
+
+.workflow-list {
+  display: grid;
+  gap: 10px;
+  margin: 20px 0;
+  padding: 0;
+  list-style: none;
+}
+
+.workflow-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px;
+  border: 1px solid #e4e9f1;
+  border-radius: 10px;
+}
+
+.workflow-main h2 {
+  margin-bottom: 5px;
+  color: #172033;
+  font-size: 1rem;
+}
+
+.workflow-main p {
+  margin-bottom: 0;
+  color: #64748b;
+  font-size: 0.85rem;
+}
+
+.workflow-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.workflow-status {
+  flex: 0 0 auto;
+  padding: 5px 9px;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 750;
+}
+
+.status-draft {
+  background: #fff7db;
+  color: #855b00;
+}
+
+.status-active {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.status-disabled {
+  background: #e9eef7;
+  color: #475569;
+}
+
+.edit-link {
+  color: #1d4ed8;
+  font-size: 0.9rem;
+  font-weight: 650;
+  text-decoration: none;
+}
+
+.edit-link:hover {
+  text-decoration: underline;
+}
+
+.message {
+  margin: 20px 0;
+  color: #64748b;
+  line-height: 1.5;
+}
+
+.message.error {
+  color: #b42318;
+}
+
+.message button {
+  margin-top: 8px;
+}
+
+.load-more {
+  margin-top: 4px;
+}
+
+@media (max-width: 560px) {
+  .workflow-page {
+    padding: 20px;
+  }
+
+  .workflow-header,
+  .workflow-item {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .workflow-actions {
+    flex-wrap: wrap;
+  }
+}

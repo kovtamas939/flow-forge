@@ -1,0 +1,131 @@
+<section class="workflow-page" aria-labelledby="workflow-page-title">
+  <header class="workflow-header">
+    <div>
+      <p class="eyebrow">Workspace</p>
+      <h1 id="workflow-page-title">Workflows</h1>
+      <p class="description">
+        Workflows belonging to the selected workspace.
+      </p>
+    </div>
+
+    @if (canWriteWorkflows()) {
+      <button
+        class="create-button"
+        type="button"
+        (click)="toggleCreateForm()"
+      >
+        {{ showCreateForm() ? 'Cancel' : 'Create workflow' }}
+      </button>
+    }
+  </header>
+
+  @if (showCreateForm() && canWriteWorkflows()) {
+    <form
+      class="create-form"
+      (ngSubmit)="createWorkflow()"
+      #createForm="ngForm"
+    >
+      <label for="workflow-name">Workflow name</label>
+      <input
+        id="workflow-name"
+        name="workflowName"
+        type="text"
+        minlength="1"
+        maxlength="120"
+        required
+        [(ngModel)]="newWorkflowName"
+      />
+
+      @if (createError()) {
+        <p class="error-text" role="alert">{{ createError() }}</p>
+      }
+
+      <button
+        type="submit"
+        [disabled]="createForm.invalid || isCreating()"
+      >
+        {{ isCreating() ? 'Creating…' : 'Create draft' }}
+      </button>
+    </form>
+  }
+
+  @if (loadError()) {
+    <div class="message error" role="alert">
+      <p>{{ loadError() }}</p>
+      <button type="button" (click)="retry()">Try again</button>
+    </div>
+  }
+
+  @if (actionError()) {
+    <p class="action-error" role="alert">{{ actionError() }}</p>
+  }
+
+  @if (workflows().length === 0 && isLoading()) {
+    <p class="message" role="status">Loading workflows…</p>
+  } @else if (workflows().length === 0 && !loadError()) {
+    <p class="message">This workspace doesn't have any workflows yet.</p>
+  } @else if (workflows().length > 0) {
+    <ul class="workflow-list">
+      @for (workflow of workflows(); track workflow.id) {
+        <li class="workflow-item">
+          <div class="workflow-main">
+            <h2>{{ workflow.name }}</h2>
+            <p>Updated {{ workflow.updatedAt | date: 'medium' }}</p>
+          </div>
+
+          <div class="workflow-actions">
+            <span
+              class="workflow-status"
+              [class.status-draft]="workflow.status === 'DRAFT'"
+              [class.status-active]="workflow.status === 'ACTIVE'"
+              [class.status-disabled]="workflow.status === 'DISABLED'"
+            >
+              {{ workflow.status }}
+            </span>
+
+            @if (workflow.status === 'DRAFT' && canWriteWorkflows()) {
+              <a
+                class="edit-link"
+                [routerLink]="[
+                  '/workspaces',
+                  workspaceId(),
+                  'workflows',
+                  workflow.id,
+                  'edit'
+                ]"
+              >
+                Edit draft
+              </a>
+            }
+
+            @if (canWriteWorkflows()) {
+              <button
+                class="lifecycle-button"
+                type="button"
+                [disabled]="actionInProgressId() !== null"
+                (click)="changeWorkflowStatus(workflow)"
+              >
+                {{
+                  actionInProgressId() === workflow.id
+                    ? 'Updating…'
+                    : lifecycleButtonLabel(workflow.status)
+                }}
+              </button>
+            }
+          </div>
+        </li>
+      }
+    </ul>
+  }
+
+  @if (hasMore()) {
+    <button
+      class="load-more"
+      type="button"
+      [disabled]="isLoading()"
+      (click)="loadNextPage()"
+    >
+      {{ isLoading() ? 'Loading…' : 'Load more' }}
+    </button>
+  }
+</section>
