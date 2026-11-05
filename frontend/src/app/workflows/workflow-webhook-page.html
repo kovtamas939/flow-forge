@@ -1,0 +1,142 @@
+<section class="webhook-page" aria-labelledby="webhook-page-title">
+  <a
+    class="back-link"
+    [routerLink]="[
+      '/workspaces',
+      workspaceId(),
+      'workflows'
+    ]"
+  >
+    Back to workflows
+  </a>
+
+  @if (isLoading()) {
+    <p class="message" role="status">Loading workflow and webhooks…</p>
+  } @else if (loadError()) {
+    <div class="message error" role="alert">
+      <p>{{ loadError() }}</p>
+      <button type="button" (click)="loadPage()">Try again</button>
+    </div>
+  } @else if (workflow(); as currentWorkflow) {
+    <header class="webhook-header">
+      <div>
+        <p class="eyebrow">Workflow</p>
+        <h1 id="webhook-page-title">{{ currentWorkflow.name }}</h1>
+        <p class="description">
+          Configure webhook endpoints for this workflow.
+        </p>
+      </div>
+
+      <a
+        class="history-link"
+        [routerLink]="[
+          '/workspaces',
+          workspaceId(),
+          'workflows',
+          currentWorkflow.id,
+          'history'
+        ]"
+      >
+        View history
+      </a>
+    </header>
+
+    <p class="workflow-note">
+      Webhook events are processed when the workflow is active.
+    </p>
+
+    @if (createdWebhook(); as created) {
+      <section class="secret-panel" aria-labelledby="secret-title">
+        <h2 id="secret-title">Webhook created</h2>
+        <p>
+          Copy this secret now. It is shown only in this response and will not
+          be available after you leave or reload this page.
+        </p>
+
+        <h3>Webhook endpoint path</h3>
+        <code class="copyable-value">{{ webhookEndpoint(created.webhook.id) }}</code>
+
+        <h3>Webhook secret</h3>
+        <code class="copyable-value secret-value">{{ created.secret }}</code>
+
+        <button type="button" (click)="dismissSecret()">
+          Hide secret
+        </button>
+      </section>
+    }
+
+    @if (canCreateWebhook()) {
+      <section class="create-section" aria-labelledby="create-webhook-title">
+        <div>
+          <h2 id="create-webhook-title">Create a webhook</h2>
+          <p>
+            FlowForge will generate a new secret for signing requests to this
+            webhook.
+          </p>
+        </div>
+
+        @if (createError()) {
+          <p class="error-text" role="alert">{{ createError() }}</p>
+        }
+
+        <button
+          type="button"
+          [disabled]="isCreating()"
+          (click)="createWebhook()"
+        >
+          {{ isCreating() ? 'Creating…' : 'Create webhook' }}
+        </button>
+      </section>
+    }
+
+    <section class="webhook-section" aria-labelledby="webhook-list-title">
+      <h2 id="webhook-list-title">Webhooks</h2>
+
+      @if (webhooks().length === 0) {
+        <p class="message">This workflow doesn't have any webhooks yet.</p>
+      } @else {
+        <ul class="webhook-list">
+          @for (webhook of webhooks(); track webhook.id) {
+            <li class="webhook-item">
+              <div>
+                <h3>Webhook {{ webhook.id }}</h3>
+                <p>
+                  Created {{ webhook.createdAt | date: 'medium' }}
+                </p>
+              </div>
+
+              <div class="webhook-meta">
+                <span
+                  class="webhook-status"
+                  [class.enabled]="webhook.isEnabled"
+                  [class.disabled]="!webhook.isEnabled"
+                >
+                  {{ webhook.isEnabled ? 'Enabled' : 'Disabled' }}
+                </span>
+                <span>Secret version {{ webhook.secretVersion }}</span>
+              </div>
+            </li>
+          }
+        </ul>
+      }
+
+      @if (webhookLoadError()) {
+        <div class="message error" role="alert">
+          <p>{{ webhookLoadError() }}</p>
+          <button type="button" (click)="retryLoadMore()">Try again</button>
+        </div>
+      }
+
+      @if (hasMore()) {
+        <button
+          class="load-more"
+          type="button"
+          [disabled]="isLoadingMore()"
+          (click)="loadMore()"
+        >
+          {{ isLoadingMore() ? 'Loading…' : 'Load more' }}
+        </button>
+      }
+    </section>
+  }
+</section>

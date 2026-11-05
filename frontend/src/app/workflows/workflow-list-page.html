@@ -83,6 +83,19 @@
               {{ workflow.status }}
             </span>
 
+            <a
+              class="edit-link"
+              [routerLink]="[
+                '/workspaces',
+                workspaceId(),
+                'workflows',
+                workflow.id,
+                'webhooks'
+              ]"
+            >
+              Manage webhooks
+            </a>
+
             @if (workflow.status === 'DRAFT' && canWriteWorkflows()) {
               <a
                 class="edit-link"

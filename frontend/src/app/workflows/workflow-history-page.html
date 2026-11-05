@@ -1,0 +1,210 @@
+<section class="history-page" aria-labelledby="history-page-title">
+  <a
+    class="back-link"
+    [routerLink]="[
+      '/workspaces',
+      workspaceId(),
+      'workflows',
+      workflow()?.id,
+      'webhooks'
+    ]"
+  >
+    Back to webhooks
+  </a>
+
+  @if (isLoadingWorkflow()) {
+    <p class="message" role="status">Loading workflow…</p>
+  } @else if (workflowError()) {
+    <div class="message error" role="alert">
+      <p>{{ workflowError() }}</p>
+      <button type="button" (click)="loadWorkflow()">Try again</button>
+    </div>
+  } @else if (workflow(); as currentWorkflow) {
+    <header class="history-header">
+      <div>
+        <p class="eyebrow">Workflow history</p>
+        <h1 id="history-page-title">{{ currentWorkflow.name }}</h1>
+        <p class="description">
+          Review received events and their workflow executions.
+        </p>
+      </div>
+    </header>
+
+    <section class="history-section" aria-labelledby="events-title">
+      <h2 id="events-title">Events</h2>
+      <p class="section-description">
+        Events received by this workflow's webhooks. Payloads are not shown.
+      </p>
+
+      @if (isLoadingEvents() && events().length === 0) {
+        <p class="message" role="status">Loading events…</p>
+      } @else if (events().length === 0 && !eventsError()) {
+        <p class="message">No events have been received yet.</p>
+      } @else if (events().length > 0) {
+        <ul class="history-list">
+          @for (event of events(); track event.id) {
+            <li class="history-item">
+              <div class="record-heading">
+                <div>
+                  <h3>Event {{ event.id }}</h3>
+                  <p>
+                    External event ID:
+                    <code>{{ event.externalEventId }}</code>
+                  </p>
+                </div>
+                <span
+                  class="status"
+                  [class.status-pending]="event.executionStatus === null"
+                  [class.status-completed]="event.executionStatus === 'COMPLETED'"
+                  [class.status-failed]="event.executionStatus === 'FAILED'"
+                >
+                  {{ eventStatusLabel(event) }}
+                </span>
+              </div>
+
+              <dl class="record-details">
+                <div>
+                  <dt>Received</dt>
+                  <dd>{{ event.receivedAt | date: 'medium' }}</dd>
+                </div>
+                <div>
+                  <dt>Webhook ID</dt>
+                  <dd><code>{{ event.webhookId }}</code></dd>
+                </div>
+                <div>
+                  <dt>Execution ID</dt>
+                  <dd>
+                    @if (event.executionId; as executionId) {
+                      <code>{{ executionId }}</code>
+                    } @else {
+                      <span>Not created yet</span>
+                    }
+                  </dd>
+                </div>
+              </dl>
+            </li>
+          }
+        </ul>
+      }
+
+      @if (eventsError()) {
+        <div class="message error" role="alert">
+          <p>{{ eventsError() }}</p>
+          <button type="button" (click)="loadEvents()">Try again</button>
+        </div>
+      }
+
+      @if (hasMoreEvents()) {
+        <button
+          class="load-more"
+          type="button"
+          [disabled]="isLoadingEvents()"
+          (click)="loadEvents()"
+        >
+          {{ isLoadingEvents() ? 'Loading…' : 'Load more events' }}
+        </button>
+      }
+    </section>
+
+    <section class="history-section" aria-labelledby="executions-title">
+      <h2 id="executions-title">Executions</h2>
+      <p class="section-description">
+        Each execution is pinned to the workflow version that it ran.
+      </p>
+
+      @if (isLoadingExecutions() && executions().length === 0) {
+        <p class="message" role="status">Loading executions…</p>
+      } @else if (executions().length === 0 && !executionsError()) {
+        <p class="message">No executions have been created yet.</p>
+      } @else if (executions().length > 0) {
+        <ul class="history-list">
+          @for (execution of executions(); track execution.id) {
+            <li class="history-item">
+              <div class="record-heading">
+                <div>
+                  <h3>Execution {{ execution.id }}</h3>
+                  <p>
+                    Event ID: <code>{{ execution.eventId }}</code>
+                  </p>
+                </div>
+                <span
+                  class="status"
+                  [class.status-pending]="
+                    execution.status === 'PENDING' ||
+                    execution.status === 'RETRY_PENDING'
+                  "
+                  [class.status-running]="execution.status === 'RUNNING'"
+                  [class.status-completed]="execution.status === 'COMPLETED'"
+                  [class.status-failed]="execution.status === 'FAILED'"
+                >
+                  {{ execution.status }}
+                </span>
+              </div>
+
+              <dl class="record-details">
+                <div>
+                  <dt>Created</dt>
+                  <dd>{{ execution.createdAt | date: 'medium' }}</dd>
+                </div>
+                <div>
+                  <dt>Attempts</dt>
+                  <dd>{{ execution.attemptCount }}</dd>
+                </div>
+                <div>
+                  <dt>Workflow version</dt>
+                  <dd><code>{{ execution.workflowVersionId }}</code></dd>
+                </div>
+                <div>
+                  <dt>Started</dt>
+                  <dd>
+                    {{
+                      execution.startedAt
+                        ? (execution.startedAt | date: 'medium')
+                        : 'Not started'
+                    }}
+                  </dd>
+                </div>
+                <div>
+                  <dt>Finished</dt>
+                  <dd>
+                    {{
+                      execution.finishedAt
+                        ? (execution.finishedAt | date: 'medium')
+                        : 'Not finished'
+                    }}
+                  </dd>
+                </div>
+                @if (execution.lastErrorCode) {
+                  <div>
+                    <dt>Last error code</dt>
+                    <dd><code>{{ execution.lastErrorCode }}</code></dd>
+                  </div>
+                }
+              </dl>
+            </li>
+          }
+        </ul>
+      }
+
+      @if (executionsError()) {
+        <div class="message error" role="alert">
+          <p>{{ executionsError() }}</p>
+          <button type="button" (click)="loadExecutions()">
+            Try again
+          </button>
+        </div>
+      }
+
+      @if (hasMoreExecutions()) {
+        <button
+          class="load-more"
+          type="button"
+          [disabled]="isLoadingExecutions()"
+          (click)="loadExecutions()"
+        >
+          {{ isLoadingExecutions() ? 'Loading…' : 'Load more executions' }}
+        </button>
+      }
+    </section>
+  }
+</section>
