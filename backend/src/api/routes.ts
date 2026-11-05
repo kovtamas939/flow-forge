@@ -7,6 +7,8 @@ import { webhookIngressRoutes } from "./routes/webhook-ingress.js";
 import { workflowActivationRoutes } from "./routes/workflow-activation.js";
 import { workflowDetailRoutes } from "./routes/workflow-detail.js";
 import { workflowDraftRoutes } from "./routes/workflow-drafts.js";
+import { workflowEventHistoryRoutes } from "./routes/workflow-event-history.js";
+import { workflowExecutionHistoryRoutes } from "./routes/workflow-execution-history.js";
 import { workflowLifecycleRoutes } from "./routes/workflow-lifecycle.js";
 import { workflowListRoutes } from "./routes/workflow-list.js";
 import { workflowRoutes } from "./routes/workflows.js";
@@ -25,8 +27,8 @@ export async function registerRoutes(
   options: RegisterRoutesOptions,
 ): Promise<void> {
   await app.register(healthRoutes, {
-  pool: options.pool,
-});
+    pool: options.pool,
+  });
   await app.register(authRoutes, {
     pool: options.pool,
     secureCookies: options.secureCookies,
@@ -61,6 +63,12 @@ export async function registerRoutes(
   await app.register(workflowWebhookRoutes, {
     pool: options.pool,
     webhookEncryptionKey: options.webhookEncryptionKey,
+  });
+  await app.register(workflowEventHistoryRoutes, {
+    pool: options.pool,
+  });
+  await app.register(workflowExecutionHistoryRoutes, {
+    pool: options.pool,
   });
   await app.register(webhookIngressRoutes, {
     pool: options.pool,
