@@ -1,6 +1,8 @@
 import { lookup } from "node:dns/promises";
 import { BlockList, isIP } from "node:net";
 
+const DNS_LOOKUP_TIMEOUT_MS = 5_000;
+
 const BLOCKED_IPV4_SUBNETS = [
   ["0.0.0.0", 8],
   ["10.0.0.0", 8],
@@ -66,6 +68,11 @@ export type SafeHttpRequestTarget = {
   family: 4 | 6;
 };
 
+type ResolvedAddress = {
+  address: string;
+  family: number;
+};
+
 function getUrlHostname(url: URL): string {
   if (url.hostname.startsWith("[") && url.hostname.endsWith("]")) {
     return url.hostname.slice(1, -1);
@@ -91,6 +98,35 @@ function isPublicAddress(address: string, family: number): boolean {
   }
 
   return false;
+}
+
+async function resolveHostname(
+  hostname: string,
+): Promise<ResolvedAddress[]> {
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+
+  try {
+    return await Promise.race([
+      lookup(hostname, {
+        all: true,
+        order: "verbatim",
+      }),
+      new Promise<never>((_resolve, reject) => {
+        timeout = setTimeout(() => {
+          reject(
+            new HttpRequestPolicyError(
+              "HTTP_DNS_LOOKUP_TIMEOUT",
+              "The HTTP action hostname lookup exceeded its 5 second timeout",
+            ),
+          );
+        }, DNS_LOOKUP_TIMEOUT_MS);
+      }),
+    ]);
+  } finally {
+    if (timeout !== undefined) {
+      clearTimeout(timeout);
+    }
+  }
 }
 
 export async function resolveSafeHttpRequestTarget(
@@ -131,13 +167,10 @@ export async function resolveSafeHttpRequestTarget(
   }
 
   const literalIpFamily = isIP(hostname);
-  const addresses =
+  const addresses: ResolvedAddress[] =
     literalIpFamily === 4 || literalIpFamily === 6
       ? [{ address: hostname, family: literalIpFamily }]
-      : await lookup(hostname, {
-          all: true,
-          order: "verbatim",
-        });
+      : await resolveHostname(hostname);
 
   if (addresses.length === 0) {
     throw new HttpRequestPolicyError(
@@ -165,11 +198,11 @@ export async function resolveSafeHttpRequestTarget(
   }
 
   if (selectedAddress.family !== 4 && selectedAddress.family !== 6) {
-  throw new HttpRequestPolicyError(
-    "HTTP_DESTINATION_UNRESOLVABLE",
-    "The HTTP action hostname did not resolve to an IP address",
-  );
-}
+    throw new HttpRequestPolicyError(
+      "HTTP_DESTINATION_UNRESOLVABLE",
+      "The HTTP action hostname did not resolve to an IP address",
+    );
+  }
 
   return {
     url,

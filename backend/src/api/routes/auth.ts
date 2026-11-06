@@ -78,6 +78,7 @@ const registrationSchema = {
     201: currentUserResponseSchema,
     400: errorResponseSchema,
     409: errorResponseSchema,
+    429: errorResponseSchema,
   },
 } as const;
 
@@ -95,6 +96,7 @@ const loginSchema = {
     200: currentUserResponseSchema,
     400: errorResponseSchema,
     401: errorResponseSchema,
+    429: errorResponseSchema,
   },
 } as const;
 
@@ -154,6 +156,12 @@ export async function authRoutes(
     {
       attachValidation: true,
       schema: registrationSchema,
+      config: {
+        rateLimit: {
+          max: 5,
+          timeWindow: 60_000,
+        },
+      },
     },
     async (request, reply) => {
       if (request.validationError !== undefined) {
@@ -192,6 +200,12 @@ export async function authRoutes(
     {
       attachValidation: true,
       schema: loginSchema,
+      config: {
+        rateLimit: {
+          max: 10,
+          timeWindow: 60_000,
+        },
+      },
     },
     async (request, reply) => {
       if (request.validationError !== undefined) {

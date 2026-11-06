@@ -1,4 +1,6 @@
 import fastifyCookie from "@fastify/cookie";
+import fastifyHelmet from "@fastify/helmet";
+import fastifyRateLimit from "@fastify/rate-limit";
 import fastifySwagger from "@fastify/swagger";
 import fastifySwaggerUi from "@fastify/swagger-ui";
 import Fastify from "fastify";
@@ -13,6 +15,8 @@ import {
 import { registerCsrfProtection } from "./csrf-protection.js";
 import { registerOpenApiRouteMetadata } from "./openapi-route-metadata.js";
 import { registerRoutes } from "./routes.js";
+
+const API_MAX_BODY_BYTES = 1024 * 1024;
 
 type ErrorDetails = {
   name: string;
@@ -62,6 +66,7 @@ export async function buildApp(
   exposeApiDocumentation = false,
 ): Promise<FastifyInstance> {
   const app = Fastify({
+    bodyLimit: API_MAX_BODY_BYTES,
     logger: {
       level: "info",
       redact: {
@@ -86,6 +91,25 @@ export async function buildApp(
   app.setErrorHandler((error, request, reply) => {
     const errorDetails = getErrorDetails(error);
     const statusCode = errorDetails.statusCode;
+
+    if (statusCode === 429) {
+      request.log.warn(
+        {
+          requestId: request.id,
+          errorName: errorDetails.name,
+          statusCode,
+        },
+        "Request rate limit exceeded",
+      );
+
+      return reply.code(429).send(
+        createErrorResponse(
+          "RATE_LIMIT_EXCEEDED",
+          "Too many requests. Please try again later.",
+          request.id,
+        ),
+      );
+    }
 
     if (
       statusCode !== undefined &&
@@ -138,6 +162,20 @@ export async function buildApp(
   });
 
   await app.register(fastifyCookie);
+
+  await app.register(fastifyRateLimit, {
+    global: false,
+  });
+
+  await app.register(fastifyHelmet, {
+    contentSecurityPolicy: false,
+    hsts: secureCookies
+      ? {
+          maxAge: 15_552_000,
+          includeSubDomains: true,
+        }
+      : false,
+  });
 
   await app.register(fastifySwagger, {
     openapi: {

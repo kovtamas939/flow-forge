@@ -63,6 +63,7 @@ const webhookIngressSchema = {
     401: errorResponseSchema,
     413: errorResponseSchema,
     415: errorResponseSchema,
+    429: errorResponseSchema,
   },
 } as const;
 
@@ -91,6 +92,12 @@ export async function webhookIngressRoutes(
     {
       attachValidation: true,
       schema: webhookIngressSchema,
+      config: {
+        rateLimit: {
+          max: 600,
+          timeWindow: 60_000,
+        },
+      },
     },
     async (request, reply) => {
       if (request.validationError !== undefined) {

@@ -3,6 +3,7 @@ import { request as httpsRequest } from "node:https";
 import type { LookupFunction } from "node:net";
 import type { WorkflowAction } from "../workflow-definition.js";
 import {
+  HttpRequestPolicyError,
   resolveSafeHttpRequestTarget,
   type SafeHttpRequestTarget,
 } from "./http-request-security.js";
@@ -53,7 +54,9 @@ function createPinnedLookup(target: SafeHttpRequestTarget): LookupFunction {
   };
 }
 
-function createBodyTooLargeError(bodyType: "request" | "response"): HttpActionError {
+function createBodyTooLargeError(
+  bodyType: "request" | "response",
+): HttpActionError {
   return new HttpActionError(
     `HTTP_${bodyType.toUpperCase()}_BODY_TOO_LARGE`,
     `The HTTP action ${bodyType} body exceeds the configured size limit`,
@@ -251,6 +254,14 @@ export function createHttpRequestAdapter(): HttpRequestAdapter {
       try {
         target = await resolveSafeHttpRequestTarget(delivery.action.url);
       } catch (error) {
+        if (error instanceof HttpRequestPolicyError) {
+          throw new HttpActionError(
+            error.code,
+            error.message,
+            error.code === "HTTP_DNS_LOOKUP_TIMEOUT",
+          );
+        }
+
         if (error instanceof Error && "code" in error) {
           throw new HttpActionError(
             String(error.code),
