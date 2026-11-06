@@ -11,7 +11,7 @@ Workflow automation.
 
 ## Local development
 
-#### PostgreSQL (from the repository root):
+### Start infrastructure (from the repository root)
 
 ```bash
 cp .env.example .env
@@ -19,9 +19,11 @@ docker compose up -d
 docker compose ps
 ```
 
-The root .env file configures Docker Compose. It is separate from backend/.env.
+Wait until both PostgreSQL and Redis show as healthy before starting backend processes.
 
-#### API (from backend/):
+The root `.env` file configures Docker Compose. It is separate from `backend/.env`.
+
+#### Start the API (from backend/):
 
 ```bash
 cp .env.example .env
@@ -34,13 +36,19 @@ npm run migrate:local
 npm run start:local
 ```
 
-#### Backend worker (from backend/):
+Run the migration command after PostgreSQL is available and before starting the API or worker. It applies any pending database migrations. The API does not run migrations automatically.
+
+#### Start the worker (from backend/):
+
+After migrations have completed successfully, start the worker in a separate terminal:
 
 ```bash
 npm run start:worker:local
 ```
 
-#### Frontend (From frontend/):
+The worker checks its PostgreSQL and Redis connections during startup.
+
+#### Start the frontend (From frontend/):
 
 ```bash
 npm install
@@ -75,8 +83,27 @@ Supply that value through the deployment platform's secret settings. Do not comm
 
 The root `.env.example` configures local Docker Compose services. The `backend/.env.example` configures local backend development. The integration tests use `backend/.env.test`.
 
-Before starting a deployment process, validate its environment:
+## Deployment startup order
+
+1. Supply the required environment variables and secrets to the migration process, API, and worker.
+2. Wait until PostgreSQL and Redis are available.
+3. Validate deployment configuration:
 
 ```bash
-npm run check-config
+   npm run check-config
 ```
+
+4. Run the migrations as a one-off deployment job:
+
+```bash
+   npm run migrate
+```
+
+5. Start the API and worker only after the migration job succeeds.
+
+## Health and readiness
+
+- `GET /health` reports whether the API process is responding.
+- `GET /ready` reports whether the API can reach PostgreSQL. It does not verify that migrations are current.
+- The worker has no HTTP health endpoint. Its startup log reports that it connected after PostgreSQL and BullMQ are ready. Monitor the worker process separately.
+  Keep the API and worker out of service until the migration job succeeds. A successful `/ready` response alone does not prove that the deployment's migrations have run.
