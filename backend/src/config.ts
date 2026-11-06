@@ -44,14 +44,19 @@ function parseNodeEnv(
   raw: string | undefined,
   errors: string[],
 ): NodeEnv {
-  const value = raw ?? "development";
+  if (raw === undefined) {
+    errors.push(
+      "NODE_ENV is required; set it to development, test, or production",
+    );
+    return "development";
+  }
 
-  if (!NODE_ENVS.has(value)) {
+  if (!NODE_ENVS.has(raw)) {
     errors.push("NODE_ENV must be one of: development, test, production");
     return "development";
   }
 
-  return value as NodeEnv;
+  return raw as NodeEnv;
 }
 
 function parseHost(raw: string | undefined, errors: string[]): string {
@@ -167,7 +172,14 @@ export function loadConfig(
   const errors: string[] = [];
 
   const nodeEnv = parseNodeEnv(readOptional(env, "NODE_ENV"), errors);
-  const host = parseHost(readOptional(env, "HOST"), errors);
+
+  const rawHost = readOptional(env, "HOST");
+  const host = parseHost(rawHost, errors);
+
+  if (nodeEnv === "production" && rawHost === undefined) {
+    errors.push("HOST must be explicitly set in production");
+  }
+
   const port = parsePort(readOptional(env, "PORT"), errors);
   const databaseUrl = parseDatabaseUrl(
     readOptional(env, "DATABASE_URL"),
@@ -177,7 +189,14 @@ export function loadConfig(
     readOptional(env, "WEBHOOK_ENCRYPTION_KEY"),
     errors,
   );
-  const redisHost = parseHost(readOptional(env, "REDIS_HOST"), errors);
+
+  const rawRedisHost = readOptional(env, "REDIS_HOST");
+  const redisHost = parseHost(rawRedisHost, errors);
+
+  if (nodeEnv === "production" && rawRedisHost === undefined) {
+    errors.push("REDIS_HOST must be explicitly set in production");
+  }
+
   const redisPort = parseRedisPort(
     readOptional(env, "REDIS_PORT"),
     errors,
