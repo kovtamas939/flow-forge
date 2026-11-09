@@ -19,19 +19,33 @@
   } @else if (workflow(); as currentWorkflow) {
     <header class="draft-header">
       <div>
-        <p class="eyebrow">Draft workflow</p>
+        <p class="eyebrow">
+          {{ currentWorkflow.status === 'DRAFT' ? 'Draft workflow' : 'Active workflow' }}
+        </p>
         <h1 id="draft-page-title">{{ currentWorkflow.name }}</h1>
         <p class="workflow-status">Status: {{ currentWorkflow.status }}</p>
+        @if (currentWorkflow.currentVersion; as currentVersion) {
+          <p class="workflow-status">
+            Current published version: {{ currentVersion.versionNumber }}
+          </p>
+        }
       </div>
     </header>
 
-    @if (currentWorkflow.status === 'DRAFT') {
-      <p class="editor-help">
-        Edit the workflow definition as JSON. The backend checks whether the
-        definition is valid when you activate the workflow.
-      </p>
+    @if (currentWorkflow.status === 'DRAFT' || currentWorkflow.status === 'ACTIVE') {
+      @if (currentWorkflow.status === 'DRAFT') {
+        <p class="editor-help">
+          Edit the workflow definition as JSON. Save the draft here, then
+          activate it from the workflow list.
+        </p>
+      } @else {
+        <p class="editor-help">
+          Edit the current published definition. Publishing creates a new
+          immutable version and makes it the current version immediately.
+        </p>
+      }
 
-      <form (ngSubmit)="saveDraft()">
+      <form (ngSubmit)="submitDefinition()">
         <label for="definition">Workflow definition</label>
         <textarea
           id="definition"
@@ -51,13 +65,19 @@
         }
 
         <button type="submit" [disabled]="isSaving()">
-          {{ isSaving() ? 'Saving…' : 'Save draft' }}
+          @if (isSaving()) {
+            Saving…
+          } @else if (currentWorkflow.status === 'DRAFT') {
+            Save draft
+          } @else {
+            Publish new version
+          }
         </button>
       </form>
     } @else {
       <p class="message">
-        This workflow is {{ currentWorkflow.status }}. Only draft workflows can
-        be edited here.
+        This workflow is {{ currentWorkflow.status }}. Enable it from the
+        workflow list before publishing a new version.
       </p>
     }
   }

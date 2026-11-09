@@ -64,3 +64,11 @@ export type WorkflowActivationResponseDto = {
   workflow: Omit<WorkflowListItemDto, 'currentVersionId'>;
   versionNumber: number;
 };
+
+export type WorkflowVersionPublishResponseDto = {
+  version: {
+    id: string;
+    workflowId: string;
+    versionNumber: number;
+  };
+};

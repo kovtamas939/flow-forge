@@ -96,7 +96,10 @@
               Manage webhooks
             </a>
 
-            @if (workflow.status === 'DRAFT' && canWriteWorkflows()) {
+            @if (
+              (workflow.status === 'DRAFT' || workflow.status === 'ACTIVE') &&
+              canWriteWorkflows()
+            ) {
               <a
                 class="edit-link"
                 [routerLink]="[
@@ -107,7 +110,7 @@
                   'edit'
                 ]"
               >
-                Edit draft
+                {{ workflow.status === 'DRAFT' ? 'Edit draft' : 'Edit & publish version' }}
               </a>
             }
 

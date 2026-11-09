@@ -8,6 +8,7 @@ import {
   WorkflowDraftResponseDto,
   WorkflowLifecycleResponseDto,
   WorkflowListResponseDto,
+  WorkflowVersionPublishResponseDto,
 } from './workflow.models';
 
 @Injectable({
@@ -83,6 +84,23 @@ export class WorkflowApiService {
     >(
       `workspaces/${encodedWorkspaceId}/workflows/${encodedWorkflowId}/activate`,
       {},
+    );
+  }
+
+  publishWorkflowVersion(
+    workspaceId: string,
+    workflowId: string,
+    definition: unknown,
+  ): Observable<WorkflowVersionPublishResponseDto> {
+    const encodedWorkspaceId = encodeURIComponent(workspaceId);
+    const encodedWorkflowId = encodeURIComponent(workflowId);
+
+    return this.apiClient.post<
+      { definition: unknown },
+      WorkflowVersionPublishResponseDto
+    >(
+      `workspaces/${encodedWorkspaceId}/workflows/${encodedWorkflowId}/versions`,
+      { definition },
     );
   }
 

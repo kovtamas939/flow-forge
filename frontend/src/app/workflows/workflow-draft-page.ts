@@ -57,10 +57,29 @@ export class WorkflowDraftPage implements OnInit {
       next: (response) => {
         this.workflow.set(response.workflow);
 
-        const definition =
-          response.workflow.draftDefinition ?? INITIAL_WORKFLOW_DEFINITION;
+        if (
+          response.workflow.status === 'ACTIVE' &&
+          response.workflow.currentVersion === null
+        ) {
+          this.loadError.set(
+            'This active workflow does not have a published version.',
+          );
+          this.isLoading.set(false);
+          return;
+        }
 
-        this.definitionText.set(JSON.stringify(definition, null, 2));
+        const definition =
+          response.workflow.status === 'ACTIVE'
+            ? response.workflow.currentVersion?.definition
+            : response.workflow.draftDefinition;
+
+        this.definitionText.set(
+          JSON.stringify(
+            definition ?? INITIAL_WORKFLOW_DEFINITION,
+            null,
+            2,
+          ),
+        );
         this.isLoading.set(false);
       },
       error: () => {
@@ -72,12 +91,12 @@ export class WorkflowDraftPage implements OnInit {
     });
   }
 
-  protected saveDraft(): void {
+  protected submitDefinition(): void {
     const workflow = this.workflow();
 
     if (
       workflow === null ||
-      workflow.status !== 'DRAFT' ||
+      (workflow.status !== 'DRAFT' && workflow.status !== 'ACTIVE') ||
       this.isSaving()
     ) {
       return;
@@ -86,13 +105,86 @@ export class WorkflowDraftPage implements OnInit {
     this.saveError.set('');
     this.saveSuccess.set('');
 
+    const definition = this.parseDefinition();
+
+    if (definition === null) {
+      return;
+    }
+
+    this.isSaving.set(true);
+
+    if (workflow.status === 'DRAFT') {
+      this.workflowApi
+        .replaceDraftDefinition(this.workspaceId, this.workflowId, definition)
+        .subscribe({
+          next: (response) => {
+            this.workflow.update((current) =>
+              current === null
+                ? current
+                : {
+                    ...current,
+                    draftDefinition: response.workflow.draftDefinition,
+                    updatedAt: response.workflow.updatedAt,
+                  },
+            );
+            this.saveSuccess.set('Draft saved.');
+            this.isSaving.set(false);
+          },
+          error: () => {
+            this.saveError.set(
+              'Could not save the draft. Check your workspace access and definition.',
+            );
+            this.isSaving.set(false);
+          },
+        });
+
+      return;
+    }
+
+    this.workflowApi
+      .publishWorkflowVersion(
+        this.workspaceId,
+        this.workflowId,
+        definition,
+      )
+      .subscribe({
+        next: (response) => {
+          this.saveSuccess.set(
+            `Published version ${response.version.versionNumber}.`,
+          );
+
+          this.workflowApi
+            .getWorkflow(this.workspaceId, this.workflowId)
+            .subscribe({
+              next: (detailResponse) => {
+                this.workflow.set(detailResponse.workflow);
+                this.isSaving.set(false);
+              },
+              error: () => {
+                this.saveError.set(
+                  'The version was published, but the workflow details could not be refreshed. Reload the page to see the latest version.',
+                );
+                this.isSaving.set(false);
+              },
+            });
+        },
+        error: () => {
+          this.saveError.set(
+            'Could not publish this version. Check the definition and your workspace access.',
+          );
+          this.isSaving.set(false);
+        },
+      });
+  }
+
+  private parseDefinition(): Record<string, unknown> | null {
     let definition: unknown;
 
     try {
       definition = JSON.parse(this.definitionText());
     } catch {
       this.saveError.set('The definition is not valid JSON.');
-      return;
+      return null;
     }
 
     if (
@@ -101,33 +193,9 @@ export class WorkflowDraftPage implements OnInit {
       Array.isArray(definition)
     ) {
       this.saveError.set('The workflow definition must be a JSON object.');
-      return;
+      return null;
     }
 
-    this.isSaving.set(true);
-
-    this.workflowApi
-      .replaceDraftDefinition(this.workspaceId, this.workflowId, definition)
-      .subscribe({
-        next: (response) => {
-          this.workflow.update((current) =>
-            current === null
-              ? current
-              : {
-                  ...current,
-                  draftDefinition: response.workflow.draftDefinition,
-                  updatedAt: response.workflow.updatedAt,
-                },
-          );
-          this.saveSuccess.set('Draft saved.');
-          this.isSaving.set(false);
-        },
-        error: () => {
-          this.saveError.set(
-            'Could not save the draft. Check your workspace access and definition.',
-          );
-          this.isSaving.set(false);
-        },
-      });
+    return definition as Record<string, unknown>;
   }
 }
