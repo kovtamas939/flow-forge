@@ -1,7 +1,16 @@
 import { DatePipe } from '@angular/common';
-import { Component, computed, inject, OnInit, signal } from '@angular/core';
+import {
+  Component,
+  computed,
+  DestroyRef,
+  inject,
+  OnInit,
+  signal,
+} from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
+import { distinctUntilChanged, map } from 'rxjs';
 import { WorkspaceStateService } from '../workspaces/workspace-state.service';
 import { WorkflowApiService } from './workflow-api.service';
 import { WorkflowListItemDto } from './workflow.models';
@@ -44,22 +53,32 @@ export class WorkflowListPage implements OnInit {
   private readonly router = inject(Router);
   private readonly workflowApi = inject(WorkflowApiService);
   private readonly workspaceState = inject(WorkspaceStateService);
+  private readonly destroyRef = inject(DestroyRef);
   private pageSize = 20;
   private nextOffset = 0;
+  private requestGeneration = 0;
 
   ngOnInit(): void {
-    const workspaceId = this.route.snapshot.paramMap.get('workspaceId');
+    this.route.paramMap
+      .pipe(
+        map((params) => params.get('workspaceId')),
+        distinctUntilChanged(),
+        takeUntilDestroyed(this.destroyRef),
+      )
+      .subscribe((workspaceId) => {
+        this.resetWorkflowList();
 
-    if (workspaceId === null) {
-      this.loadError.set('A workspace was not specified.');
-      return;
-    }
+        if (workspaceId === null) {
+          this.loadError.set('A workspace was not specified.');
+          return;
+        }
 
-    this.workspaceId.set(workspaceId);
-    this.pageSize = this.readQueryNumber('limit', 20, 1, 100);
-    this.nextOffset = this.readQueryNumber('offset', 0, 0);
+        this.workspaceId.set(workspaceId);
+        this.pageSize = this.readQueryNumber('limit', 20, 1, 100);
+        this.nextOffset = this.readQueryNumber('offset', 0, 0);
 
-    this.loadNextPage();
+        this.loadNextPage();
+      });
   }
 
   protected loadNextPage(): void {
@@ -73,6 +92,8 @@ export class WorkflowListPage implements OnInit {
       return;
     }
 
+    const requestGeneration = this.requestGeneration;
+
     this.isLoading.set(true);
     this.loadError.set('');
 
@@ -80,6 +101,10 @@ export class WorkflowListPage implements OnInit {
       .listWorkflows(workspaceId, this.pageSize, this.nextOffset)
       .subscribe({
         next: (response) => {
+          if (requestGeneration !== this.requestGeneration) {
+            return;
+          }
+
           this.workflows.update((current) => [
             ...current,
             ...response.workflows,
@@ -89,6 +114,10 @@ export class WorkflowListPage implements OnInit {
           this.isLoading.set(false);
         },
         error: () => {
+          if (requestGeneration !== this.requestGeneration) {
+            return;
+          }
+
           this.loadError.set(
             'Could not load workflows. Check your workspace access and try again.',
           );
@@ -192,6 +221,17 @@ export class WorkflowListPage implements OnInit {
       case 'DISABLED':
         return 'Enable';
     }
+  }
+
+  private resetWorkflowList(): void {
+    this.requestGeneration += 1;
+    this.workflows.set([]);
+    this.hasMore.set(false);
+    this.isLoading.set(false);
+    this.loadError.set('');
+    this.actionInProgressId.set(null);
+    this.actionError.set('');
+    this.nextOffset = 0;
   }
 
   private applyWorkflowUpdate(updatedWorkflow: {

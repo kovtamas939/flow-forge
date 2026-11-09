@@ -1,7 +1,7 @@
 import { HttpErrorResponse } from '@angular/common/http';
 import { Component, computed, effect, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { RouterLink, RouterOutlet } from '@angular/router';
+import { Router, RouterLink, RouterOutlet } from '@angular/router';
 import { AuthApiService } from './auth/auth-api.service';
 import { AuthStateService } from './auth/auth-state.service';
 import { getWorkspaceNavigationItems } from './workspaces/workspace-navigation';
@@ -61,6 +61,7 @@ export class App {
   });
 
   private readonly authApi = inject(AuthApiService);
+  private readonly router = inject(Router);
   private readonly workspaceApi = inject(WorkspaceApiService);
 
   constructor() {
@@ -186,6 +187,7 @@ export class App {
         this.workspaceState.addCreatedWorkspace(response.workspace);
         this.workspaceName.set('');
         this.isCreatingWorkspace.set(false);
+        this.navigateToWorkspace(response.workspace.id);
       },
       error: (error: unknown) => {
         this.isCreatingWorkspace.set(false);
@@ -215,13 +217,13 @@ export class App {
     this.authApi.logout().subscribe({
       next: () => {
         this.isLoggingOut.set(false);
-        this.authState.setUnauthenticated();
+        this.finishLogout();
       },
       error: (error: unknown) => {
         this.isLoggingOut.set(false);
 
         if (error instanceof HttpErrorResponse && error.status === 401) {
-          this.authState.setUnauthenticated();
+          this.finishLogout();
           return;
         }
 
@@ -232,9 +234,23 @@ export class App {
 
   protected selectWorkspace(workspaceId: string): void {
     this.workspaceState.selectWorkspace(workspaceId);
+    this.navigateToWorkspace(workspaceId);
   }
 
   protected retryWorkspaceLoad(): void {
     this.workspaceState.loadMyWorkspaces();
+  }
+
+  private finishLogout(): void {
+    this.authState.setUnauthenticated();
+    void this.router.navigateByUrl('/');
+  }
+
+  private navigateToWorkspace(workspaceId: string): void {
+    void this.router.navigate([
+      '/workspaces',
+      workspaceId,
+      'workflows',
+    ]);
   }
 }

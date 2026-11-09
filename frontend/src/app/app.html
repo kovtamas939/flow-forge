@@ -252,5 +252,7 @@
     }
   </section>
 
-  <router-outlet />
+  @if (authState.state().status === 'authenticated') {
+    <router-outlet />
+  }
 </main>
