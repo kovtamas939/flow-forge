@@ -1,6 +1,9 @@
 import { inject, Injectable, signal } from '@angular/core';
 import { WorkspaceApiService } from './workspace-api.service';
-import { UserWorkspaceDto } from './workspace.models';
+import type {
+  CreateWorkspaceResponseDto,
+  UserWorkspaceDto,
+} from './workspace.models';
 
 export type WorkspaceState =
   | { status: 'idle' }
@@ -44,6 +47,34 @@ export class WorkspaceStateService {
       error: () => {
         this.stateSignal.set({ status: 'error' });
       },
+    });
+  }
+
+  addCreatedWorkspace(
+    createdWorkspace: CreateWorkspaceResponseDto['workspace'],
+  ): void {
+    const currentState = this.stateSignal();
+
+    if (currentState.status !== 'loaded') {
+      return;
+    }
+
+    const workspace: UserWorkspaceDto = {
+      id: createdWorkspace.id,
+      name: createdWorkspace.name,
+      role: 'OWNER',
+      createdAt: createdWorkspace.createdAt,
+    };
+
+    this.stateSignal.set({
+      status: 'loaded',
+      workspaces: [
+        workspace,
+        ...currentState.workspaces.filter(
+          (existingWorkspace) => existingWorkspace.id !== workspace.id,
+        ),
+      ],
+      selectedWorkspaceId: workspace.id,
     });
   }
 

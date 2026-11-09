@@ -1,6 +1,6 @@
 import { HttpErrorResponse } from '@angular/common/http';
 import { inject, Injectable, signal } from '@angular/core';
-import { AuthenticatedUserDto } from './auth.models';
+import type { AuthenticatedUserDto } from './auth.models';
 import { AuthApiService } from './auth-api.service';
 
 export type AuthState =
@@ -39,7 +39,7 @@ export class AuthStateService {
           error instanceof HttpErrorResponse &&
           error.status === 401
         ) {
-          this.stateSignal.set({ status: 'unauthenticated' });
+          this.setUnauthenticated();
           return;
         }
 
@@ -50,5 +50,9 @@ export class AuthStateService {
 
   setAuthenticatedUser(user: AuthenticatedUserDto): void {
     this.stateSignal.set({ status: 'authenticated', user });
+  }
+
+  setUnauthenticated(): void {
+    this.stateSignal.set({ status: 'unauthenticated' });
   }
 }

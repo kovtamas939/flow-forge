@@ -19,9 +19,30 @@
           </p>
         </div>
       } @else if (auth.status === 'authenticated') {
+        <div class="account-bar">
+          <p>
+            Signed in as
+            <span class="user-email">{{ auth.user.email }}</span>
+          </p>
+          <button
+            class="secondary-button"
+            type="button"
+            [disabled]="isLoggingOut()"
+            (click)="logout()"
+          >
+            {{ isLoggingOut() ? 'Signing out…' : 'Sign out' }}
+          </button>
+        </div>
+
+        @if (logoutError()) {
+          <p class="error-message" role="alert">{{ logoutError() }}</p>
+        }
+
         @if (workspaceState.state(); as workspaceStateValue) {
-          @if (workspaceStateValue.status === 'loading' ||
-          workspaceStateValue.status === 'idle') {
+          @if (
+            workspaceStateValue.status === 'loading' ||
+            workspaceStateValue.status === 'idle'
+          ) {
             <div class="state-message" role="status">
               <h1 id="page-title">Loading your workspaces</h1>
               <p>Getting the workspaces you belong to.</p>
@@ -34,81 +55,140 @@
                 Try again
               </button>
             </div>
-          } @else if (workspaceStateValue.workspaces.length === 0) {
-            <div class="state-message">
-              <h1 id="page-title">No workspaces yet</h1>
-              <p>You don't belong to any workspaces yet.</p>
-            </div>
           } @else {
-            <div class="workspace-heading">
-              <h1 id="page-title">Choose a workspace</h1>
-              <p>
-                Signed in as
-                <span class="user-email">{{ auth.user.email }}</span>
-              </p>
-            </div>
-
-            <div class="workspace-list" aria-label="Your workspaces">
-              @for (workspace of workspaceStateValue.workspaces; track
-              workspace.id) {
-                <button
-                  type="button"
-                  class="workspace-option"
-                  [class.selected]="
-                    workspaceStateValue.selectedWorkspaceId === workspace.id
-                  "
-                  [attr.aria-pressed]="
-                    workspaceStateValue.selectedWorkspaceId === workspace.id
-                  "
-                  (click)="selectWorkspace(workspace.id)"
-                >
-                  <span class="workspace-name">{{ workspace.name }}</span>
-                  <span class="workspace-role">{{ workspace.role }}</span>
-                </button>
-              }
-            </div>
-
-            @if (selectedWorkspace(); as selected) {
-              <section class="workspace-navigation">
-                <h2>{{ selected.name }}</h2>
-                <p class="role-summary">
-                  Your role: <strong>{{ selected.role }}</strong>
-                </p>
-
-                <nav aria-label="Workspace navigation">
-                  <ul class="navigation-list">
-                    @for (item of navigationItems(); track item.label) {
-                      <li>
-                        @if (item.path) {
-                          <a
-                            class="navigation-item"
-                            [routerLink]="item.path"
-                          >
-                            {{ item.label }}
-                          </a>
-                        } @else {
-                          <span class="navigation-item" aria-disabled="true">
-                            <span>{{ item.label }}</span>
-                            <span class="coming-soon">Coming soon</span>
-                          </span>
-                        }
-                      </li>
-                    }
-                  </ul>
-                </nav>
-              </section>
+            @if (workspaceStateValue.workspaces.length === 0) {
+              <div class="workspace-heading">
+                <h1 id="page-title">Create your first workspace</h1>
+                <p>A workspace is where you organize your workflows.</p>
+              </div>
             } @else {
-              <p class="selection-hint">Select a workspace to continue.</p>
+              <div class="workspace-heading">
+                <h1 id="page-title">Choose a workspace</h1>
+              </div>
+
+              <div class="workspace-list" aria-label="Your workspaces">
+                @for (workspace of workspaceStateValue.workspaces; track
+                workspace.id) {
+                  <button
+                    type="button"
+                    class="workspace-option"
+                    [class.selected]="
+                      workspaceStateValue.selectedWorkspaceId === workspace.id
+                    "
+                    [attr.aria-pressed]="
+                      workspaceStateValue.selectedWorkspaceId === workspace.id
+                    "
+                    (click)="selectWorkspace(workspace.id)"
+                  >
+                    <span class="workspace-name">{{ workspace.name }}</span>
+                    <span class="workspace-role">{{ workspace.role }}</span>
+                  </button>
+                }
+              </div>
+
+              @if (selectedWorkspace(); as selected) {
+                <section class="workspace-navigation">
+                  <h2>{{ selected.name }}</h2>
+                  <p class="role-summary">
+                    Your role: <strong>{{ selected.role }}</strong>
+                  </p>
+
+                  <nav aria-label="Workspace navigation">
+                    <ul class="navigation-list">
+                      @for (item of navigationItems(); track item.label) {
+                        <li>
+                          @if (item.path) {
+                            <a
+                              class="navigation-item"
+                              [routerLink]="item.path"
+                            >
+                              {{ item.label }}
+                            </a>
+                          } @else {
+                            <span class="navigation-item" aria-disabled="true">
+                              <span>{{ item.label }}</span>
+                              <span class="coming-soon">Coming soon</span>
+                            </span>
+                          }
+                        </li>
+                      }
+                    </ul>
+                  </nav>
+                </section>
+              } @else {
+                <p class="selection-hint">
+                  Select a workspace to continue.
+                </p>
+              }
             }
+
+            <section class="workspace-create">
+              <h2>
+                {{
+                  workspaceStateValue.workspaces.length === 0
+                    ? 'Create workspace'
+                    : 'Create another workspace'
+                }}
+              </h2>
+
+              <form
+                (ngSubmit)="createWorkspace()"
+                #workspaceForm="ngForm"
+              >
+                <label for="workspace-name">Workspace name</label>
+                <input
+                  id="workspace-name"
+                  name="workspaceName"
+                  type="text"
+                  minlength="1"
+                  maxlength="120"
+                  required
+                  [(ngModel)]="workspaceName"
+                />
+
+                @if (workspaceCreationError()) {
+                  <p class="error-message" role="alert">
+                    {{ workspaceCreationError() }}
+                  </p>
+                }
+
+                <button
+                  type="submit"
+                  [disabled]="workspaceForm.invalid || isCreatingWorkspace()"
+                >
+                  {{
+                    isCreatingWorkspace()
+                      ? 'Creating…'
+                      : 'Create workspace'
+                  }}
+                </button>
+              </form>
+            </section>
           }
         }
       } @else {
         <div class="form-heading">
-          <h1 id="page-title">Sign in</h1>
-          <p>Sign in to your FlowForge account.</p>
+          @if (authMode() === 'login') {
+            <h1 id="page-title">Sign in</h1>
+            <p>Sign in to your FlowForge account.</p>
+          } @else {
+            <h1 id="page-title">Create your account</h1>
+            <p>Create an account to start using FlowForge.</p>
+          }
         </div>
 
-        <form (ngSubmit)="submitLogin()" #loginForm="ngForm">
+        @if (registrationSuccess()) {
+          <p class="success-message" role="status">
+            {{ registrationSuccess() }}
+          </p>
+        }
+
+        <form
+          (ngSubmit)="
+            authMode() === 'login' ? submitLogin() : submitRegistration()
+          "
+          #authForm="ngForm"
+        >
           <label for="email">Email address</label>
           <input
             id="email"
@@ -124,7 +204,11 @@
             id="password"
             name="password"
             type="password"
-            autocomplete="current-password"
+            [attr.autocomplete]="
+              authMode() === 'register' ? 'new-password' : 'current-password'
+            "
+            minlength="15"
+            maxlength="128"
             required
             [(ngModel)]="password"
           />
@@ -133,13 +217,37 @@
             <p class="error-message" role="alert">{{ loginError() }}</p>
           }
 
+          @if (registrationError()) {
+            <p class="error-message" role="alert">
+              {{ registrationError() }}
+            </p>
+          }
+
           <button
             type="submit"
-            [disabled]="loginForm.invalid || isSubmitting()"
+            [disabled]="authForm.invalid || isSubmitting()"
           >
-            {{ isSubmitting() ? 'Signing in…' : 'Sign in' }}
+            @if (isSubmitting()) {
+              {{ authMode() === 'login' ? 'Signing in…' : 'Creating account…' }}
+            } @else {
+              {{ authMode() === 'login' ? 'Sign in' : 'Create account' }}
+            }
           </button>
         </form>
+
+        <button
+          class="text-button"
+          type="button"
+          (click)="
+            switchAuthMode(authMode() === 'login' ? 'register' : 'login')
+          "
+        >
+          {{
+            authMode() === 'login'
+              ? 'New to FlowForge? Create an account'
+              : 'Already have an account? Sign in'
+          }}
+        </button>
       }
     }
   </section>

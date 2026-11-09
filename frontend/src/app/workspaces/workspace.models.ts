@@ -10,3 +10,12 @@ export type UserWorkspaceDto = {
 export type UserWorkspacesResponseDto = {
   workspaces: UserWorkspaceDto[];
 };
+
+export type CreateWorkspaceResponseDto = {
+  workspace: {
+    id: string;
+    name: string;
+    createdAt: string;
+    updatedAt: string;
+  };
+};

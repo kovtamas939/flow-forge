@@ -67,7 +67,8 @@ h2 {
 
 .form-heading p,
 .state-message p,
-.workspace-heading p {
+.workspace-heading p,
+.account-bar p {
   margin: 10px 0 0;
   color: #64748b;
   line-height: 1.5;
@@ -122,9 +123,55 @@ form button:hover:not(:disabled),
   background: #1d4ed8;
 }
 
-form button:disabled {
+form button:disabled,
+button:disabled {
   cursor: not-allowed;
   opacity: 0.55;
+}
+
+.account-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding-bottom: 18px;
+  border-bottom: 1px solid #e4e9f1;
+}
+
+.account-bar p {
+  margin: 0;
+}
+
+.secondary-button,
+.text-button {
+  border: 0;
+  background: transparent;
+  color: #1d4ed8;
+  font-weight: 650;
+}
+
+.secondary-button {
+  flex: 0 0 auto;
+  padding: 8px 10px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+}
+
+.secondary-button:hover:not(:disabled),
+.text-button:hover {
+  background: #eff6ff;
+}
+
+.text-button {
+  margin-top: 18px;
+  padding: 8px 0;
+}
+
+.success-message {
+  margin: 18px 0 0;
+  color: #18794e;
+  font-size: 0.9rem;
+  line-height: 1.45;
 }
 
 .error-message {
@@ -143,6 +190,10 @@ form button:disabled {
   color: #183153;
   font-weight: 650;
   overflow-wrap: anywhere;
+}
+
+.workspace-heading {
+  margin-top: 22px;
 }
 
 .workspace-list {
@@ -191,7 +242,8 @@ form button:disabled {
   font-weight: 700;
 }
 
-.workspace-navigation {
+.workspace-navigation,
+.workspace-create {
   margin-top: 28px;
   padding-top: 22px;
   border-top: 1px solid #e4e9f1;
@@ -245,6 +297,11 @@ a.navigation-item:hover {
 @media (max-width: 560px) {
   .auth-card {
     padding: 28px 22px;
+  }
+
+  .account-bar {
+    align-items: flex-start;
+    flex-direction: column;
   }
 
   .workspace-option {
