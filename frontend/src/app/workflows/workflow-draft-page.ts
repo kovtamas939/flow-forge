@@ -1,6 +1,12 @@
 import { Component, inject, OnInit, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, RouterLink } from '@angular/router';
+import {
+  ACTION_EXAMPLES,
+  CONDITION_EXAMPLES,
+  type ActionExample,
+  type ConditionExample,
+} from './workflow-definition-examples';
 import { WorkflowApiService } from './workflow-api.service';
 import { WorkflowDetailResponseDto } from './workflow.models';
 
@@ -34,6 +40,8 @@ export class WorkflowDraftPage implements OnInit {
   protected readonly loadError = signal('');
   protected readonly saveError = signal('');
   protected readonly saveSuccess = signal('');
+  protected readonly conditionExamples = CONDITION_EXAMPLES;
+  protected readonly actionExamples = ACTION_EXAMPLES;
 
   private readonly route = inject(ActivatedRoute);
   private readonly workflowApi = inject(WorkflowApiService);
@@ -91,6 +99,40 @@ export class WorkflowDraftPage implements OnInit {
     });
   }
 
+  protected insertConditionExample(example: ConditionExample): void {
+    const definition = this.parseCurrentDefinition();
+
+    if (definition === null) {
+      return;
+    }
+
+    definition['conditions'] = [
+      {
+        id: this.createUniqueId(definition, example.idPrefix),
+        ...example.condition,
+      },
+    ];
+
+    this.updateEditor(definition);
+  }
+
+  protected insertActionExample(example: ActionExample): void {
+    const definition = this.parseCurrentDefinition();
+
+    if (definition === null) {
+      return;
+    }
+
+    definition['actions'] = [
+      {
+        id: this.createUniqueId(definition, example.idPrefix),
+        ...example.action,
+      },
+    ];
+
+    this.updateEditor(definition);
+  }
+
   protected submitDefinition(): void {
     const workflow = this.workflow();
 
@@ -105,7 +147,7 @@ export class WorkflowDraftPage implements OnInit {
     this.saveError.set('');
     this.saveSuccess.set('');
 
-    const definition = this.parseDefinition();
+    const definition = this.parseCurrentDefinition();
 
     if (definition === null) {
       return;
@@ -177,13 +219,15 @@ export class WorkflowDraftPage implements OnInit {
       });
   }
 
-  private parseDefinition(): Record<string, unknown> | null {
+  private parseCurrentDefinition(): Record<string, unknown> | null {
     let definition: unknown;
 
     try {
       definition = JSON.parse(this.definitionText());
     } catch {
-      this.saveError.set('The definition is not valid JSON.');
+      this.saveError.set(
+        'The definition is not valid JSON. Fix it before using an example or saving.',
+      );
       return null;
     }
 
@@ -197,5 +241,52 @@ export class WorkflowDraftPage implements OnInit {
     }
 
     return definition as Record<string, unknown>;
+  }
+
+  private createUniqueId(
+    definition: Record<string, unknown>,
+    idPrefix: string,
+  ): string {
+    const existingIds = new Set<string>();
+
+    for (const sectionName of ['conditions', 'actions']) {
+      const section = definition[sectionName];
+
+      if (!Array.isArray(section)) {
+        continue;
+      }
+
+      for (const item of section) {
+        if (
+          typeof item !== 'object' ||
+          item === null ||
+          Array.isArray(item)
+        ) {
+          continue;
+        }
+
+        const id = (item as Record<string, unknown>)['id'];
+
+        if (typeof id === 'string') {
+          existingIds.add(id);
+        }
+      }
+    }
+
+    let candidate = idPrefix;
+    let suffix = 2;
+
+    while (existingIds.has(candidate)) {
+      candidate = `${idPrefix}-${suffix}`;
+      suffix += 1;
+    }
+
+    return candidate;
+  }
+
+  private updateEditor(definition: Record<string, unknown>): void {
+    this.definitionText.set(JSON.stringify(definition, null, 2));
+    this.saveError.set('');
+    this.saveSuccess.set('');
   }
 }

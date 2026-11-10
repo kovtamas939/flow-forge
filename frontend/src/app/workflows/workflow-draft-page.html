@@ -46,6 +46,57 @@
       }
 
       <form (ngSubmit)="submitDefinition()">
+        <div class="examples-panel">
+          <section class="example-group" aria-labelledby="condition-examples-title">
+            <h2 id="condition-examples-title">Condition examples</h2>
+            <p>
+              Choose a condition to replace the current conditions section.
+              Your actions and other definition fields will stay unchanged.
+            </p>
+
+            <div class="example-buttons">
+              @for (example of conditionExamples; track example.label) {
+                <button
+                  class="example-button"
+                  type="button"
+                  [disabled]="isSaving()"
+                  (click)="insertConditionExample(example)"
+                >
+                  {{ example.label }}
+                </button>
+              }
+            </div>
+          </section>
+
+          <section class="example-group" aria-labelledby="action-examples-title">
+            <h2 id="action-examples-title">Action examples</h2>
+            <p>
+              Choose an action to replace the current actions section. Your
+              conditions and other definition fields will stay unchanged.
+            </p>
+
+            <div class="example-buttons">
+              @for (example of actionExamples; track example.label) {
+                <button
+                  class="example-button"
+                  type="button"
+                  [disabled]="isSaving()"
+                  (click)="insertActionExample(example)"
+                >
+                  {{ example.label }}
+                </button>
+              }
+            </div>
+
+            <p class="example-note">
+              Notification actions need a configured provider. The example
+              can be added, but execution will fail until one is available.
+              Replace the sample HTTP URL and body with values for your
+              destination before publishing or activating.
+            </p>
+          </section>
+        </div>
+
         <label for="definition">Workflow definition</label>
         <textarea
           id="definition"
