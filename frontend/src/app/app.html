@@ -87,33 +87,14 @@
               </div>
 
               @if (selectedWorkspace(); as selected) {
-                <section class="workspace-navigation">
+                <section
+                  class="workspace-summary"
+                  aria-label="Selected workspace"
+                >
                   <h2>{{ selected.name }}</h2>
                   <p class="role-summary">
                     Your role: <strong>{{ selected.role }}</strong>
                   </p>
-
-                  <nav aria-label="Workspace navigation">
-                    <ul class="navigation-list">
-                      @for (item of navigationItems(); track item.label) {
-                        <li>
-                          @if (item.path) {
-                            <a
-                              class="navigation-item"
-                              [routerLink]="item.path"
-                            >
-                              {{ item.label }}
-                            </a>
-                          } @else {
-                            <span class="navigation-item" aria-disabled="true">
-                              <span>{{ item.label }}</span>
-                              <span class="coming-soon">Coming soon</span>
-                            </span>
-                          }
-                        </li>
-                      }
-                    </ul>
-                  </nav>
                 </section>
               } @else {
                 <p class="selection-hint">

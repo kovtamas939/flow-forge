@@ -1,17 +1,16 @@
 import { HttpErrorResponse } from '@angular/common/http';
 import { Component, computed, effect, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { Router, RouterLink, RouterOutlet } from '@angular/router';
+import { Router, RouterOutlet } from '@angular/router';
 import { AuthApiService } from './auth/auth-api.service';
 import { AuthStateService } from './auth/auth-state.service';
-import { getWorkspaceNavigationItems } from './workspaces/workspace-navigation';
 import { WorkspaceApiService } from './workspaces/workspace-api.service';
 import { WorkspaceStateService } from './workspaces/workspace-state.service';
 
 type AuthMode = 'login' | 'register';
 
 @Component({
-  imports: [FormsModule, RouterLink, RouterOutlet],
+  imports: [FormsModule, RouterOutlet],
   selector: 'app-root',
   styleUrl: './app.css',
   templateUrl: './app.html',
@@ -50,14 +49,6 @@ export class App {
         (workspace) => workspace.id === state.selectedWorkspaceId,
       ) ?? null
     );
-  });
-
-  protected readonly navigationItems = computed(() => {
-    const workspace = this.selectedWorkspace();
-
-    return workspace
-      ? getWorkspaceNavigationItems(workspace.role, workspace.id)
-      : [];
   });
 
   private readonly authApi = inject(AuthApiService);
