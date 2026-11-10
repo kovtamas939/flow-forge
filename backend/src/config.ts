@@ -8,6 +8,8 @@ export type AppConfig = {
   webhookEncryptionKey: Buffer;
   redisHost: string;
   redisPort: number;
+  gmailUser?: string;
+  gmailAppPassword?: string;
 };
 
 export class ConfigError extends Error {
@@ -202,6 +204,18 @@ export function loadConfig(
     errors,
   );
 
+  const gmailUser = readOptional(env, "GMAIL_USER");
+  const gmailAppPassword = readOptional(
+    env,
+    "GMAIL_APP_PASSWORD",
+  )?.replace(/\s/g, "");
+
+  if ((gmailUser === undefined) !== (gmailAppPassword === undefined)) {
+    errors.push(
+      "GMAIL_USER and GMAIL_APP_PASSWORD must be set together",
+    );
+  }
+
   if (errors.length > 0) {
     throw new ConfigError(
       `Invalid environment configuration: ${errors.join("; ")}`,
@@ -216,5 +230,9 @@ export function loadConfig(
     webhookEncryptionKey,
     redisHost,
     redisPort,
+    ...(gmailUser === undefined ? {} : { gmailUser }),
+    ...(gmailAppPassword === undefined
+      ? {}
+      : { gmailAppPassword }),
   };
 }

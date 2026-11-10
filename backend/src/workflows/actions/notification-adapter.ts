@@ -18,6 +18,15 @@ export class NotificationProviderNotConfiguredError extends Error {
   }
 }
 
+export class NotificationDeliveryError extends Error {
+  public readonly code = "NOTIFICATION_DELIVERY_FAILED";
+
+  public constructor(public readonly retryable: boolean) {
+    super("The notification could not be delivered");
+    this.name = "NotificationDeliveryError";
+  }
+}
+
 export function createUnconfiguredNotificationAdapter(): NotificationAdapter {
   return {
     async deliver() {

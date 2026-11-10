@@ -6,6 +6,7 @@ import { createEventWorker } from "../queue/event-worker.js";
 import { createStructuredLogger } from "../observability/structured-logger.js";
 import { createHttpRequestAdapter } from "../workflows/actions/http-request-adapter.js";
 import { createUnconfiguredNotificationAdapter } from "../workflows/actions/notification-adapter.js";
+import { createGmailNotificationAdapter } from "../workflows/actions/gmail-notification-adapter.js";
 
 const DISPATCH_INTERVAL_MILLISECONDS = 1_000;
 const OPERATIONAL_METRICS_INTERVAL_MILLISECONDS = 30_000;
@@ -21,9 +22,18 @@ async function main(): Promise<void> {
   const config = loadConfig();
   const pool = createPool(config);
   const eventQueue = createEventQueue(config);
+    const notificationAdapter =
+    config.gmailUser !== undefined &&
+    config.gmailAppPassword !== undefined
+      ? createGmailNotificationAdapter({
+          user: config.gmailUser,
+          appPassword: config.gmailAppPassword,
+        })
+      : createUnconfiguredNotificationAdapter();
+
   const actionAdapters = {
     httpRequest: createHttpRequestAdapter(),
-    notification: createUnconfiguredNotificationAdapter(),
+    notification: notificationAdapter,
   };
   const eventWorker = createEventWorker(
     config,

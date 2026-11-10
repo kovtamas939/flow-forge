@@ -20,6 +20,7 @@ import {
   type HttpRequestAdapter,
 } from "../workflows/actions/http-request-adapter.js";
 import {
+  NotificationDeliveryError,
   NotificationProviderNotConfiguredError,
   type NotificationAdapter,
 } from "../workflows/actions/notification-adapter.js";
@@ -219,6 +220,16 @@ function toSafeActionFailure(error: unknown): SafeActionFailure {
       code: "NOTIFICATION_PROVIDER_NOT_CONFIGURED",
       summary: "No notification provider is configured.",
       retryable: false,
+    };
+  }
+
+  if (error instanceof NotificationDeliveryError) {
+    return {
+      code: "NOTIFICATION_DELIVERY_FAILED",
+      summary: error.retryable
+        ? "The notification provider temporarily rejected delivery."
+        : "The notification could not be delivered.",
+      retryable: error.retryable,
     };
   }
 
