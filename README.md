@@ -1,6 +1,13 @@
 # FlowForge
 
-Workflow automation.
+Workflow Automation Platform for creating, publishing, and executing versioned workflows triggered by signed webhooks. It processes incoming events asynchronously, evaluates configurable conditions, and runs ordered actions such as HTTP requests and email notifications. The project focuses on secure API design, durable event processing, and reliable execution tracking.
+
+## Documentation
+
+- [API design](docs/api-design.md) — REST resources, authentication, authorization, and API conventions.
+- [Architecture](docs/architecture.md) — application components and the event-to-execution flow.
+- [Workflow engine](docs/workflow-engine.md) — workflow definitions, conditions, actions, and execution behavior.
+- [Database design](docs/database-design.md) — PostgreSQL entities, relationships, constraints, and durable processing.
 
 ## Layout
 
@@ -72,6 +79,15 @@ Both the API and worker require:
 The API uses `HOST` and `PORT` to listen for HTTP requests. Set `HOST` according to the deployment platform.
 
 The worker uses PostgreSQL and Redis but does not open an HTTP listener. It still loads the shared configuration, so provide `HOST` and `PORT` there as well.
+
+The worker can also use the following optional settings to deliver `notification` actions through Gmail SMTP. Set both variables together or leave both unset:
+
+| Variable             | Purpose                              |
+| -------------------- | ------------------------------------ |
+| `GMAIL_USER`         | Gmail account used as the sender.    |
+| `GMAIL_APP_PASSWORD` | App Password for that Gmail account. |
+
+Keep the App Password in the deployment platform's secret settings. Do not commit it or include it in a container image. Without these settings, notification actions fail because no provider is configured.
 
 Generate a fresh webhook encryption key with:
 
